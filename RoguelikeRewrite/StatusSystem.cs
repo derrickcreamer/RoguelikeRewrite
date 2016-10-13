@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using UtilityCollections;
 
 namespace StatusSystems {
@@ -8,6 +9,14 @@ namespace StatusSystems {
 	using Converter = Func<int, int>;
 	//sure wish I could use type params with 'using':
 	//using OnChangedDictionary<TObject, TStatus> = DefaultValueDefaultValueDictionary<StatusChange<TStatus>, OnChangedHandler<TObject, TStatus>>;
+
+	[StructLayout(LayoutKind.Explicit)]
+	internal struct EnumConverter<TEnum1, TEnum2> where TEnum1 : struct where TEnum2 : struct {
+		[FieldOffset(0)]
+		public TEnum1 e1;
+		[FieldOffset(0)]
+		public TEnum1 e2;
+	}
 
 	public enum SourceType { Value, Suppression, Prevention };
 	
@@ -118,6 +127,7 @@ namespace StatusSystems {
 				get { return handlers.GetHandler(status, overridden, false, effect); }
 				set { handlers.SetHandler(status, overridden, false, effect, value); }
 			}
+			//todo: xml comments here to explain
 			public OnChangedHandler<TObject, TStatus> Changed {
 				set {
 					handlers.SetHandler(status, overridden, true, effect, value);

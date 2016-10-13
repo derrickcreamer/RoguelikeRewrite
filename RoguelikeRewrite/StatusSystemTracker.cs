@@ -23,7 +23,7 @@ namespace NewStatusSystems { //todo namespace
 					source.Value = value;
 					return; // If any sources exist, change the value of the first one, then return.
 				}
-				Add(new Source<TObject, TBaseStatus>(status, value)); // Otherwise, create a new one.
+				AddSource(new Source<TObject, TBaseStatus>(status, value)); // Otherwise, create a new one.
 			}
 		}
 		protected static TBaseStatus Convert<TStatus>(TStatus status) where TStatus : struct {
@@ -58,7 +58,7 @@ namespace NewStatusSystems { //todo namespace
 			}
 		}
 
-		public bool Add(Source<TObject, TBaseStatus> source) {
+		public bool AddSource(Source<TObject, TBaseStatus> source) {
 			if(source == null) throw new ArgumentNullException();
 			TBaseStatus status = source.Status;
 			SourceType type = source.SourceType;
@@ -84,7 +84,7 @@ namespace NewStatusSystems { //todo namespace
 		//todo: definitely need xml comments for these methods
 		public Source<TObject, TBaseStatus> Add(TBaseStatus status, int value = 1, int priority = 0, SourceType type = SourceType.Value) {
 			var source = new Source<TObject, TBaseStatus>(status, value, priority, type);
-			if(Add(source)) return source;
+			if(AddSource(source)) return source;
 			else return null;
 		}
 		public Source<TObject, TBaseStatus, TStatus> Add<TStatus>(
@@ -92,10 +92,10 @@ namespace NewStatusSystems { //todo namespace
 			where TStatus : struct
 		{
 			var source = new Source<TObject, TBaseStatus, TStatus>(status, value, priority, type);
-			if(Add(source: source)) return source;
+			if(AddSource(source)) return source;
 			else return null;
 		}
-		public bool Remove(Source<TObject, TBaseStatus> source) {
+		public bool RemoveSource(Source<TObject, TBaseStatus> source) {
 			if(source == null) throw new ArgumentNullException();
 			TBaseStatus status = source.Status;
 			SourceType type = source.SourceType;
@@ -108,7 +108,7 @@ namespace NewStatusSystems { //todo namespace
 		}
 		public void Cancel(TBaseStatus status) {
 			foreach(var source in sources[SourceType.Value][status].OrderBy(x => x.Priority)) { //todo, check this - make sure it doesn't keep an iterator to valueSources.
-				Remove(source);
+				RemoveSource(source);
 			}
 			foreach(TBaseStatus extendingStatus in rules.statusesThatExtend[status]) Cancel(extendingStatus);
 		}

@@ -114,8 +114,14 @@ namespace NewStatusSystems { //todo, remember to change namespace
 			protected static TBaseStatus Convert<TStatus>(TStatus status) where TStatus : struct {
 				return EnumConverter.Convert<TStatus, TBaseStatus>(status);
 			}
+			protected static TBaseStatus[] Convert<TStatus>(TStatus[] statuses) where TStatus : struct {
+				if(statuses == null) return null;
+				var result = new TBaseStatus[statuses.Length];
+				for(int i=0;i<statuses.Length;++i) result[i] = EnumConverter.Convert<TStatus, TBaseStatus>(statuses[i]);
+				return result;
+			}
 			public StatusHandlers Overrides(TBaseStatus overridden) => new StatusHandlers(rules, status, overridden);
-			public StatusHandlers Overrides<TAnyStatus>(TAnyStatus overridden) where TAnyStatus : struct {
+			public StatusHandlers Overrides<TStatus>(TStatus overridden) where TStatus : struct {
 				return Overrides(Convert(overridden));
 			}
 			public Aggregator Aggregator {
@@ -132,88 +138,118 @@ namespace NewStatusSystems { //todo, remember to change namespace
 				get { return rules.SingleSource[status]; }
 				set { rules.SingleSource[status] = value; }
 			}
-			public void Extends(TBaseStatus extendedStatus) {
-				rules.statusesExtendedBy.AddUnique(status, extendedStatus);
-				rules.statusesThatExtend.AddUnique(extendedStatus, status);
-			}
-			//todo: why not (1) remove the single-status versions, and (2) allow conditions for params?
-			// (answers might be (1) performance which is irrelevant at init, and (2) maybe it'd be confusing?
-			//								(2) Also the condition would need to appear first.
+			private const string StatusExpected = "Expected one or more statuses";
 			public void Extends(params TBaseStatus[] extendedStatuses) {
+				if(extendedStatuses.Length == 0) throw new ArgumentException(StatusExpected);
 				foreach(TBaseStatus extended in extendedStatuses) {
 					rules.statusesExtendedBy.AddUnique(status, extended);
 					rules.statusesThatExtend.AddUnique(extended, status);
 				}
 			}
+			public void Extends<TStatus>(params TStatus[] extendedStatuses) where TStatus : struct => Extends(Convert(extendedStatuses));
 			public void Cancels(params TBaseStatus[] cancelledStatuses) {
+				if(cancelledStatuses.Length == 0) throw new ArgumentException(StatusExpected);
 				foreach(TBaseStatus cancelled in cancelledStatuses) {
 					rules.statusesCancelledBy.AddUnique(status, cancelled);
 				}
 			}
-			public void Cancels(TBaseStatus cancelledStatus, Func<int, bool> condition = null) {
-				rules.statusesCancelledBy.AddUnique(status, cancelledStatus);
-				if(condition != null) rules.cancellationConditions[new StatusPair<TBaseStatus>(status, cancelledStatus)] = condition;
+			public void Cancels<TStatus>(params TStatus[] cancelledStatuses) where TStatus : struct => Cancels(Convert(cancelledStatuses));
+			public void Cancels(Func<int, bool> condition, params TBaseStatus[] cancelledStatuses) {
+				if(cancelledStatuses.Length == 0) throw new ArgumentException(StatusExpected);
+				foreach(TBaseStatus cancelled in cancelledStatuses) {
+					rules.statusesCancelledBy.AddUnique(status, cancelled);
+					if(condition != null) rules.cancellationConditions[new StatusPair<TBaseStatus>(status, cancelled)] = condition;
+				}
 			}
+			public void Cancels<TStatus>(Func<int, bool> condition, params TStatus[] cancelledStatuses) where TStatus : struct => Cancels(condition, Convert(cancelledStatuses));
 			//todo: gotta explain this one, certainly
 			public void Foils(params TBaseStatus[] foiledStatuses) {
+				if(foiledStatuses.Length == 0) throw new ArgumentException(StatusExpected);
 				Cancels(foiledStatuses);
 				Suppresses(foiledStatuses);
 				Prevents(foiledStatuses); //todo: what about cycles?
 			}
-			public void Foils(TBaseStatus foiledStatus, Func<int, bool> condition = null) {
-				Cancels(foiledStatus, condition);
-				Suppresses(foiledStatus, condition);
-				Prevents(foiledStatus, condition);
+			public void Foils<TStatus>(params TStatus[] foiledStatuses) where TStatus : struct => Foils(Convert(foiledStatuses));
+			public void Foils(Func<int, bool> condition, params TBaseStatus[] foiledStatuses) {
+				if(foiledStatuses.Length == 0) throw new ArgumentException(StatusExpected);
+				Cancels(condition, foiledStatuses);
+				Suppresses(condition, foiledStatuses);
+				Prevents(condition, foiledStatuses);
 			}
-			//todo: if TStatus is int, 2 of these match. (It uses the non-params version.)
-			public void Feeds(params TBaseStatus[] fedStatuses) => FeedsInternal(SourceType.Value, fedStatuses);
-			public void Suppresses(params TBaseStatus[] suppressedStatuses) => FeedsInternal(SourceType.Suppression, suppressedStatuses);
-			public void Prevents(params TBaseStatus[] preventedStatuses) => FeedsInternal(SourceType.Prevention, preventedStatuses);
-			protected void FeedsInternal(SourceType type, params TBaseStatus[] fedStatuses) {
-				foreach(TBaseStatus fedStatus in fedStatuses) {
-					rules.statusesFedBy[type].AddUnique(status, fedStatus);
-				}
-			}
-			public void Feeds(TBaseStatus fedStatus, Converter converter) => FeedsInternal(SourceType.Value, fedStatus, converter);
-			public void Suppresses(TBaseStatus suppressedStatus, Converter converter) => FeedsInternal(SourceType.Suppression, suppressedStatus, converter);
-			public void Prevents(TBaseStatus preventedStatus, Converter converter) => FeedsInternal(SourceType.Prevention, preventedStatus, converter);
-			protected void FeedsInternal(SourceType type, TBaseStatus fedStatus, Converter converter) {
-				rules.statusesFedBy[type].AddUnique(status, fedStatus);
-				if(converter != null) {
-					rules.ValidateConverter(converter);
-					var pair = new StatusPair<TBaseStatus>(status, fedStatus);
-					rules.converters[type][pair] = converter;
-				}
-			}
-			public void Feeds(TBaseStatus fedStatus, int fedValue, Func<int, bool> condition = null) => FeedsInternal(SourceType.Value, fedStatus, fedValue, condition);
-			//these next 2 might not make much sense to use:
-			public void Suppresses(TBaseStatus suppressedStatus, int fedValue, Func<int, bool> condition = null) => FeedsInternal(SourceType.Suppression, suppressedStatus, fedValue, condition);
-			public void Prevents(TBaseStatus preventedStatus, int fedValue, Func<int, bool> condition = null) => FeedsInternal(SourceType.Prevention, preventedStatus, fedValue, condition);
-			protected void FeedsInternal(SourceType type, TBaseStatus fedStatus, int fedValue, Func<int, bool> condition) {
-				rules.statusesFedBy[type].AddUnique(status, fedStatus);
+			public void Foils<TStatus>(Func<int, bool> condition, params TStatus[] foiledStatuses) where TStatus : struct => Foils(condition, Convert(foiledStatuses));
+
+			public void Feeds(params TBaseStatus[] fedStatuses) => FeedsInternal(SourceType.Value, null, null, null, fedStatuses);
+			public void Feeds(int fedValue, params TBaseStatus[] fedStatuses) => FeedsInternal(SourceType.Value, null, fedValue, null, fedStatuses);
+			public void Feeds(int fedValue, Func<int, bool> condition, params TBaseStatus[] fedStatuses) => FeedsInternal(SourceType.Value, null, fedValue, condition, fedStatuses);
+			public void Feeds(Func<int, bool> condition, params TBaseStatus[] fedStatuses) => FeedsInternal(SourceType.Value, null, null, condition, fedStatuses);
+			public void Feeds(Converter converter, params TBaseStatus[] fedStatuses) => FeedsInternal(SourceType.Value, converter, null, null, fedStatuses);
+
+			public void Feeds<TStatus>(params TStatus[] fedStatuses) where TStatus : struct => FeedsInternal(SourceType.Value, null, null, null, Convert(fedStatuses));
+			public void Feeds<TStatus>(int fedValue, params TStatus[] fedStatuses) where TStatus : struct => FeedsInternal(SourceType.Value, null, fedValue, null, Convert(fedStatuses));
+			public void Feeds<TStatus>(int fedValue, Func<int, bool> condition, params TStatus[] fedStatuses) where TStatus : struct => FeedsInternal(SourceType.Value, null, fedValue, condition, Convert(fedStatuses));
+			public void Feeds<TStatus>(Func<int, bool> condition, params TStatus[] fedStatuses) where TStatus : struct => FeedsInternal(SourceType.Value, null, null, condition, Convert(fedStatuses));
+			public void Feeds<TStatus>(Converter converter, params TStatus[] fedStatuses) where TStatus : struct => FeedsInternal(SourceType.Value, converter, null, null, Convert(fedStatuses));
+
+			// Many of these are disabled because there's currently no valid reason to use them.
+			public void Suppresses(params TBaseStatus[] suppressedStatuses) => FeedsInternal(SourceType.Suppression, null, null, null, suppressedStatuses);
+			//public void Suppresses(int fedValue, params TBaseStatus[] suppressedStatuses) => FeedsInternal(SourceType.Suppression, null, fedValue, null, suppressedStatuses);
+			//public void Suppresses(int fedValue, Func<int, bool> condition, params TBaseStatus[] suppressedStatuses) => FeedsInternal(SourceType.Suppression, null, fedValue, condition, suppressedStatuses);
+			public void Suppresses(Func<int, bool> condition, params TBaseStatus[] suppressedStatuses) => FeedsInternal(SourceType.Suppression, null, null, condition, suppressedStatuses);
+			//public void Suppresses(Converter converter, params TBaseStatus[] suppressedStatuses) => FeedsInternal(SourceType.Suppression, converter, null, null, suppressedStatuses);
+
+			public void Suppresses<TStatus>(params TStatus[] suppressedStatuses) where TStatus : struct => FeedsInternal(SourceType.Suppression, null, null, null, Convert(suppressedStatuses));
+			//public void Suppresses<TStatus>(int fedValue, params TStatus[] suppressedStatuses) where TStatus : struct => FeedsInternal(SourceType.Suppression, null, fedValue, null, Convert(suppressedStatuses));
+			//public void Suppresses<TStatus>(int fedValue, Func<int, bool> condition, params TStatus[] suppressedStatuses) where TStatus : struct => FeedsInternal(SourceType.Suppression, null, fedValue, condition, Convert(suppressedStatuses));
+			public void Suppresses<TStatus>(Func<int, bool> condition, params TStatus[] suppressedStatuses) where TStatus : struct => FeedsInternal(SourceType.Suppression, null, null, condition, Convert(suppressedStatuses));
+			//public void Suppresses<TStatus>(Converter converter, params TStatus[] suppressedStatuses) where TStatus : struct => FeedsInternal(SourceType.Suppression, converter, null, null, Convert(suppressedStatuses));
+
+			public void Prevents(params TBaseStatus[] preventedStatuses) => FeedsInternal(SourceType.Prevention, null, null, null, preventedStatuses);
+			//public void Prevents(int fedValue, params TBaseStatus[] preventedStatuses) => FeedsInternal(SourceType.Prevention, null, fedValue, null, preventedStatuses);
+			//public void Prevents(int fedValue, Func<int, bool> condition, params TBaseStatus[] preventedStatuses) => FeedsInternal(SourceType.Prevention, null, fedValue, condition, preventedStatuses);
+			public void Prevents(Func<int, bool> condition, params TBaseStatus[] preventedStatuses) => FeedsInternal(SourceType.Prevention, null, null, condition, preventedStatuses);
+			//public void Prevents(Converter converter, params TBaseStatus[] preventedStatuses) => FeedsInternal(SourceType.Prevention, converter, null, null, preventedStatuses);
+
+			public void Prevents<TStatus>(params TStatus[] preventedStatuses) where TStatus : struct => FeedsInternal(SourceType.Prevention, null, null, null, Convert(preventedStatuses));
+			//public void Prevents<TStatus>(int fedValue, params TStatus[] preventedStatuses) where TStatus : struct => FeedsInternal(SourceType.Prevention, null, fedValue, null, Convert(preventedStatuses));
+			//public void Prevents<TStatus>(int fedValue, Func<int, bool> condition, params TStatus[] preventedStatuses) where TStatus : struct => FeedsInternal(SourceType.Prevention, null, fedValue, condition, Convert(preventedStatuses));
+			public void Prevents<TStatus>(Func<int, bool> condition, params TStatus[] preventedStatuses) where TStatus : struct => FeedsInternal(SourceType.Prevention, null, null, condition, Convert(preventedStatuses));
+			//public void Prevents<TStatus>(Converter converter, params TStatus[] preventedStatuses) where TStatus : struct => FeedsInternal(SourceType.Prevention, converter, null, null, Convert(preventedStatuses));
+
+			protected void FeedsInternal(SourceType type, Converter converter,
+				int? fedValue, Func<int, bool> condition, params TBaseStatus[] fedStatuses)
+			{
+				if(fedStatuses.Length == 0) throw new ArgumentException(StatusExpected);
 				if(condition != null) {
-					rules.converters[type][new StatusPair<TBaseStatus>(status, fedStatus)] = i => {
-						if(condition(i)) return fedValue; //todo: cache this?
-						else return 0; //todo: does this need a check that it returns 0 at the appropriate times?
-					};
+					if(fedValue != null) {
+						int fed = fedValue.Value;
+						converter = i => {
+							if(condition(i)) return fed; //todo: cache this?
+							else return 0;
+						};
+					}
+					else {
+						converter = i => {
+							if(condition(i)) return i; //todo: cache?
+							else return 0;
+						};
+					}
 				}
 				else {
-					rules.converters[type][new StatusPair<TBaseStatus>(status, fedStatus)] = i => {
-						if(i != 0) return fedValue; //todo, !=0? i thought it was >0. //todo: cache this?
-						else return 0;
-					};
+					if(fedValue != null) {
+						int fed = fedValue.Value;
+						converter = i => {
+							if(i > 0) return fed; //todo: cache?
+							else return 0;
+						};
+					}
 				}
-			}
-			public void Feeds(TBaseStatus fedStatus, Func<int, bool> condition = null) => FeedsInternal(SourceType.Value, fedStatus, condition);
-			public void Suppresses(TBaseStatus suppressedStatus, Func<int, bool> condition = null) => FeedsInternal(SourceType.Suppression, suppressedStatus, condition);
-			public void Prevents(TBaseStatus preventedStatus, Func<int, bool> condition = null) => FeedsInternal(SourceType.Prevention, preventedStatus, condition);
-			protected void FeedsInternal(SourceType type, TBaseStatus fedStatus, Func<int, bool> condition) {
-				rules.statusesFedBy[type].AddUnique(status, fedStatus);
-				if(condition != null) {
-					rules.converters[type][new StatusPair<TBaseStatus>(status, fedStatus)] = i => {
-						if(condition(i)) return i; //todo: cache?
-						else return 0;
-					};
+				if(converter != null) rules.ValidateConverter(converter);
+				foreach(TBaseStatus fedStatus in fedStatuses) {
+					rules.statusesFedBy[type].AddUnique(status, fedStatus);
+					if(converter != null) {
+						var pair = new StatusPair<TBaseStatus>(status, fedStatus);
+						rules.converters[type][pair] = converter;
+					}
 				}
 			}
 			public void PreventedWhen(Func<TObject, TBaseStatus, bool> preventionCondition) {
@@ -295,6 +331,9 @@ namespace NewStatusSystems { //todo, remember to change namespace
 		public BaseStatusTracker<TObject, TBaseStatus> CreateStatusTracker(TObject obj) {
 			return new BaseStatusTracker<TObject, TBaseStatus>(obj, this);
 		}
+		protected static TBaseStatus Convert<TStatus>(TStatus status) where TStatus : struct {
+			return EnumConverter.Convert<TStatus, TBaseStatus>(status);
+		}
 		public BaseStatusSystem() {
 			DoNothing = (obj, status, ov, nv) => { };
 			Total = ints => {
@@ -334,14 +373,14 @@ namespace NewStatusSystems { //todo, remember to change namespace
 		}
 	}
 	public class StatusSystem<TObject> : BaseStatusSystem<TObject, int> {
-		new public StatusTracker<TObject, int> CreateStatusTracker(TObject obj) => null; //todo
+		new public StatusTracker<TObject> CreateStatusTracker(TObject obj) => new StatusTracker<TObject>(obj, this);
 	}
 	public class StatusSystem<TObject, TStatus1> : StatusSystem<TObject> where TStatus1 : struct {
-		public StatusRules this[TStatus1 status] => null; //todo
-		new public StatusTracker<TObject, TStatus1> CreateStatusTracker(TObject obj) => null; //todo
+		public StatusRules this[TStatus1 status] => new StatusRules(this, Convert(status));
+		new public StatusTracker<TObject, TStatus1> CreateStatusTracker(TObject obj) => new StatusTracker<TObject, TStatus1>(obj, this);
 	}
 	public class StatusSystem<TObject, TStatus1, TStatus2> : StatusSystem<TObject, TStatus1> where TStatus1 : struct where TStatus2 : struct{
-		public StatusRules this[TStatus2 status] => null; //todo
-		new public StatusTracker<TObject, TStatus1, TStatus2> CreateStatusTracker(TObject obj) => null; //todo
+		public StatusRules this[TStatus2 status] => new StatusRules(this, Convert(status));
+		new public StatusTracker<TObject, TStatus1, TStatus2> CreateStatusTracker(TObject obj) => new StatusTracker<TObject, TStatus1, TStatus2>(obj, this);
 	}
 }

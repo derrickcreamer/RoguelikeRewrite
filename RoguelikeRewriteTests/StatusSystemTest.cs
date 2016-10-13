@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using StatusSystems;
 
-namespace RoguelikeRewriteTests {
+namespace NewStatusSystems {
 	[TestFixture] public class StatusSystemTest {
 		public enum TestStatus { A = 2, B, C, D = 7, E = -3, F = -999, AlsoD = 7 };
 		public class TestObj { }
@@ -26,36 +26,36 @@ namespace RoguelikeRewriteTests {
 		}
 		[TestFixture] public class Sources : StatusSystemTest {
 			[TestCase] public void BasicSourceOperations() {
-				Assert.Throws<ArgumentNullException>(()=> tracker.Add(null));
-				Assert.Throws<ArgumentNullException>(() => tracker.Remove(null));
+				Assert.Throws<ArgumentNullException>(()=> tracker.AddSource(null));
+				Assert.Throws<ArgumentNullException>(() => tracker.RemoveSource(null));
 				Assert.Throws<ArgumentNullException>(() => new Source<TestObj, TestStatus>(null));
-				Source<TestObj, TestStatus> s = new Source<TestObj, TestStatus>(TestStatus.E, value: 2);
+				Source<TestObj, int> s = new Source<TestObj, int>((int)TestStatus.E, value: 2);
 				Assert.AreEqual(0, tracker[TestStatus.E]);
-				tracker.Add(s);
+				tracker.AddSource(s);
 				Assert.AreEqual(2, tracker[TestStatus.E]);
 				s.Value = 7;
 				Assert.AreEqual(7, tracker[TestStatus.E]);
-				Source<TestObj, TestStatus> s2 = new Source<TestObj, TestStatus>(TestStatus.E, value: 6);
-				tracker.Add(s2);
+				Source<TestObj, int> s2 = new Source<TestObj, int, TestStatus>(TestStatus.E, value: 6);
+				tracker.AddSource(s2);
 				Assert.AreEqual(13, tracker[TestStatus.E]);
-				tracker.Remove(s);
+				tracker.RemoveSource(s);
 				Assert.AreEqual(6, tracker[TestStatus.E]);
 				tracker.Cancel(TestStatus.E);
 				Assert.AreEqual(0, tracker[TestStatus.E]);
 			}
 			[TestCase] public void SingleSource() {
 				rules[TestStatus.C].SingleSource = true;
-				Source<TestObj, TestStatus> s = new Source<TestObj, TestStatus>(TestStatus.C, value: 2);
-				Source<TestObj, TestStatus> s2 = new Source<TestObj, TestStatus>(TestStatus.C, value: 7);
-				tracker.Add(s);
-				tracker.Add(s2);
+				var s = new Source<TestObj, int, TestStatus>(TestStatus.C, value: 2);
+				var s2 = new Source<TestObj, int, TestStatus>(TestStatus.C, value: 7);
+				tracker.AddSource(s);
+				tracker.AddSource(s2);
 				Assert.AreEqual(7, tracker[TestStatus.C]);
 
 				rules[TestStatus.B].SingleSource = true;
 				tracker[TestStatus.B] = -4;
 				Assert.AreEqual(-4, tracker[TestStatus.B]);
-				Source<TestObj, TestStatus> s3 = new Source<TestObj, TestStatus>(TestStatus.B, value: 1);
-				tracker.Add(s3);
+				var s3 = new Source<TestObj, int, TestStatus>(TestStatus.B, value: 1);
+				tracker.AddSource(s3);
 				Assert.AreEqual(1, tracker[TestStatus.B]);
 				tracker.Cancel(TestStatus.B);
 				Assert.AreEqual(0, tracker[TestStatus.B]);
@@ -126,7 +126,7 @@ namespace RoguelikeRewriteTests {
 				Assert.AreEqual(3, tracker[TestStatus.B]);
 			}
 			[TestCase] public void FeedsCustom() {
-				rules[TestStatus.A].Feeds(TestStatus.B, 6, i => i%2 == 0); // "Feed 6 into B if A is even."
+				rules[TestStatus.A].Feeds(6, i => i%2 == 0, TestStatus.B); // "Feed 6 into B if A is even."
 				tracker.Add(TestStatus.A, value: 3);
 				Assert.AreEqual(0, tracker[TestStatus.B]);
 				tracker.Add(TestStatus.A, value: -1);
@@ -151,9 +151,9 @@ namespace RoguelikeRewriteTests {
 				rules[TestStatus.A].PreventedWhen((obj, status) => obj != testObj); // only testObj can receive status.A
 				TestObj testObj2 = new TestObj();
 				var tracker2 = rules.CreateStatusTracker(testObj2);
-				tracker.Add(new Source<TestObj, TestStatus>(TestStatus.A, 3));
+				tracker.AddSource(new Source<TestObj, int, TestStatus>(TestStatus.A, 3));
 				Assert.AreEqual(3, tracker[TestStatus.A]); // not prevented for testObj
-				tracker2.Add(new Source<TestObj, TestStatus>(TestStatus.A, 3));
+				tracker2.AddSource(new Source<TestObj, int, TestStatus>(TestStatus.A, 3));
 				Assert.AreEqual(0, tracker2[TestStatus.A]); // prevented for testObj2
 			}
 			[TestCase] public void Cancels() {
@@ -168,7 +168,7 @@ namespace RoguelikeRewriteTests {
 			}
 			[TestCase] public void CancelsCustom() {
 				// "whenever A increases to a value between 5 and 7, cancel B" :
-				rules[TestStatus.A].Cancels(TestStatus.B, i => i>=5 && i<=7);
+				rules[TestStatus.A].Cancels(i => i>=5 && i<=7, TestStatus.B);
 				tracker.Add(TestStatus.B, value: 55);
 				tracker.Add(TestStatus.A, value: 3);
 				Assert.AreEqual(55, tracker[TestStatus.B]); // B not cancelled
@@ -184,19 +184,19 @@ namespace RoguelikeRewriteTests {
 				rules[TestStatus.A].Messages.Decreased = (obj, st, ov, nv) => {
 					message = "Status A is no longer true";
 				};
-				var s = new Source<TestObj, TestStatus>[4];
+				var s = new Source<TestObj, int, TestStatus>[4];
 				for(int i=0;i<4;++i) {
 					int ii = i;
-					s[i] = new Source<TestObj, TestStatus>(TestStatus.A, priority: ii*ii); //0, 1, 4, & 9 priority
+					s[i] = new Source<TestObj, int, TestStatus>(TestStatus.A, priority: ii*ii); //0, 1, 4, & 9 priority
 					
 					s[i].Overrides(TestStatus.A).Messages.Decreased = (obj, st, ov, nv) => {
 						message = $"Status A is no longer true: Source {ii}";
 					};
 				}
-				tracker.Add(s[1]); // Order of addition doesn't matter
-				tracker.Add(s[3]);
-				tracker.Add(s[0]);
-				tracker.Add(s[2]);
+				tracker.AddSource(s[1]); // Order of addition doesn't matter
+				tracker.AddSource(s[3]);
+				tracker.AddSource(s[0]);
+				tracker.AddSource(s[2]);
 				tracker.Cancel(TestStatus.A);
 				Assert.AreEqual("Status A is no longer true: Source 3", message);
 				// Highest priority was last to be removed, and was the only one to actually change the
@@ -278,11 +278,11 @@ namespace RoguelikeRewriteTests {
 					num = newValue;
 				};
 				rules[TestStatus.B].Feeds(TestStatus.A);
-				Source<TestObj, TestStatus> s = new Source<TestObj, TestStatus>(TestStatus.B);
+				var s = new Source<TestObj, int, TestStatus>(TestStatus.B);
 				s.Overrides(TestStatus.A).Messages.Changed = (obj, status, oldValue, newValue) => {
 					message = "Status A changed because of status B changing";
 				};
-				tracker.Add(s);
+				tracker.AddSource(s);
 				Assert.AreEqual("Status A changed because of status B changing", message);
 				Assert.AreEqual(null, messagePart2); // The original change message for A did not happen at all
 				Assert.AreEqual(1, num); // Increase effect was not overridden

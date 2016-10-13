@@ -73,28 +73,28 @@ namespace NewStatusSystems { //todo, remember to change namespace
 		public bool Equals(StatusChange<TStatus> other) => status.Equals(other.status) && increased == other.increased && effect == other.effect;
 	}
 
-	public class BaseStatusSystem<TObject, TStatus> : IHandlers<TObject, TStatus> where TStatus : struct {
+	public class BaseStatusSystem<TObject, TBaseStatus> : IHandlers<TObject, TBaseStatus> where TBaseStatus : struct {
 		public class HandlerRules {
-			private IHandlers<TObject, TStatus> handlers;
-			private TStatus status;
-			private TStatus overridden;
+			private IHandlers<TObject, TBaseStatus> handlers;
+			private TBaseStatus status;
+			private TBaseStatus overridden;
 			private bool effect;
-			public OnChangedHandler<TObject, TStatus> Increased {
+			public OnChangedHandler<TObject, TBaseStatus> Increased {
 				get { return handlers.GetHandler(status, overridden, true, effect); }
 				set { handlers.SetHandler(status, overridden, true, effect, value); }
 			}
-			public OnChangedHandler<TObject, TStatus> Decreased {
+			public OnChangedHandler<TObject, TBaseStatus> Decreased {
 				get { return handlers.GetHandler(status, overridden, false, effect); }
 				set { handlers.SetHandler(status, overridden, false, effect, value); }
 			}
 			//todo: xml comments here to explain
-			public OnChangedHandler<TObject, TStatus> Changed {
+			public OnChangedHandler<TObject, TBaseStatus> Changed {
 				set {
 					handlers.SetHandler(status, overridden, true, effect, value);
 					handlers.SetHandler(status, overridden, false, effect, value);
 				}
 			}
-			internal HandlerRules(IHandlers<TObject, TStatus> handlers, TStatus status, TStatus overridden, bool effect) {
+			internal HandlerRules(IHandlers<TObject, TBaseStatus> handlers, TBaseStatus status, TBaseStatus overridden, bool effect) {
 				this.handlers = handlers;
 				this.status = status;
 				this.overridden = overridden;
@@ -103,18 +103,18 @@ namespace NewStatusSystems { //todo, remember to change namespace
 		}
 		public class StatusHandlers {
 			public readonly HandlerRules Messages, Effects;
-			internal StatusHandlers(IHandlers<TObject, TStatus> handlers, TStatus status, TStatus overridden) {
+			internal StatusHandlers(IHandlers<TObject, TBaseStatus> handlers, TBaseStatus status, TBaseStatus overridden) {
 				Messages = new HandlerRules(handlers, status, overridden, false);
 				Effects = new HandlerRules(handlers, status, overridden, true);
 			}
 		}
 		public class StatusRules : StatusHandlers {
-			protected BaseStatusSystem<TObject, TStatus> rules;
-			protected TStatus status;
-			protected static TStatus Convert<TOtherStatus>(TOtherStatus otherStatus) where TOtherStatus : struct {
-				return EnumConverter.Convert<TOtherStatus, TStatus>(otherStatus);
+			protected BaseStatusSystem<TObject, TBaseStatus> rules;
+			protected TBaseStatus status;
+			protected static TBaseStatus Convert<TStatus>(TStatus status) where TStatus : struct {
+				return EnumConverter.Convert<TStatus, TBaseStatus>(status);
 			}
-			public StatusHandlers Overrides(TStatus overridden) => new StatusHandlers(rules, status, overridden);
+			public StatusHandlers Overrides(TBaseStatus overridden) => new StatusHandlers(rules, status, overridden);
 			public StatusHandlers Overrides<TAnyStatus>(TAnyStatus overridden) where TAnyStatus : struct {
 				return Overrides(Convert(overridden));
 			}
@@ -132,99 +132,99 @@ namespace NewStatusSystems { //todo, remember to change namespace
 				get { return rules.SingleSource[status]; }
 				set { rules.SingleSource[status] = value; }
 			}
-			public void Extends(TStatus extendedStatus) {
+			public void Extends(TBaseStatus extendedStatus) {
 				rules.statusesExtendedBy.AddUnique(status, extendedStatus);
 				rules.statusesThatExtend.AddUnique(extendedStatus, status);
 			}
 			//todo: why not (1) remove the single-status versions, and (2) allow conditions for params?
 			// (answers might be (1) performance which is irrelevant at init, and (2) maybe it'd be confusing?
 			//								(2) Also the condition would need to appear first.
-			public void Extends(params TStatus[] extendedStatuses) {
-				foreach(TStatus extended in extendedStatuses) {
+			public void Extends(params TBaseStatus[] extendedStatuses) {
+				foreach(TBaseStatus extended in extendedStatuses) {
 					rules.statusesExtendedBy.AddUnique(status, extended);
 					rules.statusesThatExtend.AddUnique(extended, status);
 				}
 			}
-			public void Cancels(params TStatus[] cancelledStatuses) {
-				foreach(TStatus cancelled in cancelledStatuses) {
+			public void Cancels(params TBaseStatus[] cancelledStatuses) {
+				foreach(TBaseStatus cancelled in cancelledStatuses) {
 					rules.statusesCancelledBy.AddUnique(status, cancelled);
 				}
 			}
-			public void Cancels(TStatus cancelledStatus, Func<int, bool> condition = null) {
+			public void Cancels(TBaseStatus cancelledStatus, Func<int, bool> condition = null) {
 				rules.statusesCancelledBy.AddUnique(status, cancelledStatus);
-				if(condition != null) rules.cancellationConditions[new StatusPair<TStatus>(status, cancelledStatus)] = condition;
+				if(condition != null) rules.cancellationConditions[new StatusPair<TBaseStatus>(status, cancelledStatus)] = condition;
 			}
 			//todo: gotta explain this one, certainly
-			public void Foils(params TStatus[] foiledStatuses) {
+			public void Foils(params TBaseStatus[] foiledStatuses) {
 				Cancels(foiledStatuses);
 				Suppresses(foiledStatuses);
 				Prevents(foiledStatuses); //todo: what about cycles?
 			}
-			public void Foils(TStatus foiledStatus, Func<int, bool> condition = null) {
+			public void Foils(TBaseStatus foiledStatus, Func<int, bool> condition = null) {
 				Cancels(foiledStatus, condition);
 				Suppresses(foiledStatus, condition);
 				Prevents(foiledStatus, condition);
 			}
 			//todo: if TStatus is int, 2 of these match. (It uses the non-params version.)
-			public void Feeds(params TStatus[] fedStatuses) => FeedsInternal(SourceType.Value, fedStatuses);
-			public void Suppresses(params TStatus[] suppressedStatuses) => FeedsInternal(SourceType.Suppression, suppressedStatuses);
-			public void Prevents(params TStatus[] preventedStatuses) => FeedsInternal(SourceType.Prevention, preventedStatuses);
-			protected void FeedsInternal(SourceType type, params TStatus[] fedStatuses) {
-				foreach(TStatus fedStatus in fedStatuses) {
+			public void Feeds(params TBaseStatus[] fedStatuses) => FeedsInternal(SourceType.Value, fedStatuses);
+			public void Suppresses(params TBaseStatus[] suppressedStatuses) => FeedsInternal(SourceType.Suppression, suppressedStatuses);
+			public void Prevents(params TBaseStatus[] preventedStatuses) => FeedsInternal(SourceType.Prevention, preventedStatuses);
+			protected void FeedsInternal(SourceType type, params TBaseStatus[] fedStatuses) {
+				foreach(TBaseStatus fedStatus in fedStatuses) {
 					rules.statusesFedBy[type].AddUnique(status, fedStatus);
 				}
 			}
-			public void Feeds(TStatus fedStatus, Converter converter) => FeedsInternal(SourceType.Value, fedStatus, converter);
-			public void Suppresses(TStatus suppressedStatus, Converter converter) => FeedsInternal(SourceType.Suppression, suppressedStatus, converter);
-			public void Prevents(TStatus preventedStatus, Converter converter) => FeedsInternal(SourceType.Prevention, preventedStatus, converter);
-			protected void FeedsInternal(SourceType type, TStatus fedStatus, Converter converter) {
+			public void Feeds(TBaseStatus fedStatus, Converter converter) => FeedsInternal(SourceType.Value, fedStatus, converter);
+			public void Suppresses(TBaseStatus suppressedStatus, Converter converter) => FeedsInternal(SourceType.Suppression, suppressedStatus, converter);
+			public void Prevents(TBaseStatus preventedStatus, Converter converter) => FeedsInternal(SourceType.Prevention, preventedStatus, converter);
+			protected void FeedsInternal(SourceType type, TBaseStatus fedStatus, Converter converter) {
 				rules.statusesFedBy[type].AddUnique(status, fedStatus);
 				if(converter != null) {
 					rules.ValidateConverter(converter);
-					var pair = new StatusPair<TStatus>(status, fedStatus);
+					var pair = new StatusPair<TBaseStatus>(status, fedStatus);
 					rules.converters[type][pair] = converter;
 				}
 			}
-			public void Feeds(TStatus fedStatus, int fedValue, Func<int, bool> condition = null) => FeedsInternal(SourceType.Value, fedStatus, fedValue, condition);
+			public void Feeds(TBaseStatus fedStatus, int fedValue, Func<int, bool> condition = null) => FeedsInternal(SourceType.Value, fedStatus, fedValue, condition);
 			//these next 2 might not make much sense to use:
-			public void Suppresses(TStatus suppressedStatus, int fedValue, Func<int, bool> condition = null) => FeedsInternal(SourceType.Suppression, suppressedStatus, fedValue, condition);
-			public void Prevents(TStatus preventedStatus, int fedValue, Func<int, bool> condition = null) => FeedsInternal(SourceType.Prevention, preventedStatus, fedValue, condition);
-			protected void FeedsInternal(SourceType type, TStatus fedStatus, int fedValue, Func<int, bool> condition) {
+			public void Suppresses(TBaseStatus suppressedStatus, int fedValue, Func<int, bool> condition = null) => FeedsInternal(SourceType.Suppression, suppressedStatus, fedValue, condition);
+			public void Prevents(TBaseStatus preventedStatus, int fedValue, Func<int, bool> condition = null) => FeedsInternal(SourceType.Prevention, preventedStatus, fedValue, condition);
+			protected void FeedsInternal(SourceType type, TBaseStatus fedStatus, int fedValue, Func<int, bool> condition) {
 				rules.statusesFedBy[type].AddUnique(status, fedStatus);
 				if(condition != null) {
-					rules.converters[type][new StatusPair<TStatus>(status, fedStatus)] = i => {
+					rules.converters[type][new StatusPair<TBaseStatus>(status, fedStatus)] = i => {
 						if(condition(i)) return fedValue; //todo: cache this?
 						else return 0; //todo: does this need a check that it returns 0 at the appropriate times?
 					};
 				}
 				else {
-					rules.converters[type][new StatusPair<TStatus>(status, fedStatus)] = i => {
+					rules.converters[type][new StatusPair<TBaseStatus>(status, fedStatus)] = i => {
 						if(i != 0) return fedValue; //todo, !=0? i thought it was >0. //todo: cache this?
 						else return 0;
 					};
 				}
 			}
-			public void Feeds(TStatus fedStatus, Func<int, bool> condition = null) => FeedsInternal(SourceType.Value, fedStatus, condition);
-			public void Suppresses(TStatus suppressedStatus, Func<int, bool> condition = null) => FeedsInternal(SourceType.Suppression, suppressedStatus, condition);
-			public void Prevents(TStatus preventedStatus, Func<int, bool> condition = null) => FeedsInternal(SourceType.Prevention, preventedStatus, condition);
-			protected void FeedsInternal(SourceType type, TStatus fedStatus, Func<int, bool> condition) {
+			public void Feeds(TBaseStatus fedStatus, Func<int, bool> condition = null) => FeedsInternal(SourceType.Value, fedStatus, condition);
+			public void Suppresses(TBaseStatus suppressedStatus, Func<int, bool> condition = null) => FeedsInternal(SourceType.Suppression, suppressedStatus, condition);
+			public void Prevents(TBaseStatus preventedStatus, Func<int, bool> condition = null) => FeedsInternal(SourceType.Prevention, preventedStatus, condition);
+			protected void FeedsInternal(SourceType type, TBaseStatus fedStatus, Func<int, bool> condition) {
 				rules.statusesFedBy[type].AddUnique(status, fedStatus);
 				if(condition != null) {
-					rules.converters[type][new StatusPair<TStatus>(status, fedStatus)] = i => {
+					rules.converters[type][new StatusPair<TBaseStatus>(status, fedStatus)] = i => {
 						if(condition(i)) return i; //todo: cache?
 						else return 0;
 					};
 				}
 			}
-			public void PreventedWhen(Func<TObject, TStatus, bool> preventionCondition) {
+			public void PreventedWhen(Func<TObject, TBaseStatus, bool> preventionCondition) {
 				rules.extraPreventionConditions.AddUnique(status, preventionCondition);
 			}
-			internal StatusRules(BaseStatusSystem<TObject, TStatus> rules, TStatus status) : base(rules, status, status) {
+			internal StatusRules(BaseStatusSystem<TObject, TBaseStatus> rules, TBaseStatus status) : base(rules, status, status) {
 				this.rules = rules;
 				this.status = status;
 			}
 		}
-		public StatusRules this[TStatus status] => new StatusRules(this, status);
+		public StatusRules this[TBaseStatus status] => new StatusRules(this, status);
 		protected Dictionary<SourceType, Aggregator> defaultAggs;
 		public Aggregator DefaultValueAggregator {
 			get { return defaultAggs[SourceType.Value]; }
@@ -238,20 +238,20 @@ namespace NewStatusSystems { //todo, remember to change namespace
 			if(agg(Enumerable.Empty<int>()) != 0) throw new ArgumentException("Aggregators must have a base value of 0.");
 		}
 
-		internal DefaultValueDictionary<TStatus, Aggregator> valueAggs;
-		internal DefaultHashSet<TStatus> SingleSource { get; private set; }
+		internal DefaultValueDictionary<TBaseStatus, Aggregator> valueAggs;
+		internal DefaultHashSet<TBaseStatus> SingleSource { get; private set; }
 
-		internal MultiValueDictionary<TStatus, TStatus> statusesCancelledBy;
-		internal MultiValueDictionary<TStatus, TStatus> statusesExtendedBy;
-		internal MultiValueDictionary<TStatus, TStatus> statusesThatExtend;
+		internal MultiValueDictionary<TBaseStatus, TBaseStatus> statusesCancelledBy;
+		internal MultiValueDictionary<TBaseStatus, TBaseStatus> statusesExtendedBy;
+		internal MultiValueDictionary<TBaseStatus, TBaseStatus> statusesThatExtend;
 
-		internal Dictionary<SourceType, MultiValueDictionary<TStatus, TStatus>> statusesFedBy;
+		internal Dictionary<SourceType, MultiValueDictionary<TBaseStatus, TBaseStatus>> statusesFedBy;
 
-		internal Dictionary<SourceType, Dictionary<StatusPair<TStatus>, Converter>> converters;
+		internal Dictionary<SourceType, Dictionary<StatusPair<TBaseStatus>, Converter>> converters;
 		internal void ValidateConverter(Converter conv) {
 			if(conv(0) != 0) throw new ArgumentException("Converters must output 0 when input is 0.");
 		}
-		internal DefaultValueDictionary<StatusPair<TStatus>, Func<int, bool>> cancellationConditions;
+		internal DefaultValueDictionary<StatusPair<TBaseStatus>, Func<int, bool>> cancellationConditions;
 
 		protected bool trackerCreated;
 		internal bool TrackerCreated {
@@ -264,36 +264,36 @@ namespace NewStatusSystems { //todo, remember to change namespace
 		}
 		public bool IgnoreRuleErrors { get; set; } //todo: so this is the performance one, right? It ignores ALL of them, no matter how breaking.
 
-		public readonly OnChangedHandler<TObject, TStatus> DoNothing;
+		public readonly OnChangedHandler<TObject, TBaseStatus> DoNothing;
 		public readonly Aggregator Total;
 		public readonly Aggregator Bool;
 		public readonly Aggregator MaximumOrZero;
 		//todo: helpers for creating conditional converters?
 
-		internal DefaultValueDictionary<TStatus, DefaultValueDictionary<StatusChange<TStatus>, OnChangedHandler<TObject, TStatus>>> onChangedHandlers;
-		internal MultiValueDictionary<TStatus, Func<TObject, TStatus, bool>> extraPreventionConditions;
+		internal DefaultValueDictionary<TBaseStatus, DefaultValueDictionary<StatusChange<TBaseStatus>, OnChangedHandler<TObject, TBaseStatus>>> onChangedHandlers;
+		internal MultiValueDictionary<TBaseStatus, Func<TObject, TBaseStatus, bool>> extraPreventionConditions;
 
-		internal Aggregator GetAggregator(TStatus status, SourceType type) {
+		internal Aggregator GetAggregator(TBaseStatus status, SourceType type) {
 			if(type == SourceType.Value) {
 				Aggregator agg = valueAggs[status];
 				if(agg != null) return agg;
 			}
 			return defaultAggs[type];
 		}
-		void IHandlers<TObject, TStatus>.SetHandler(TStatus status, TStatus overridden, bool increased, bool effect, OnChangedHandler<TObject, TStatus> handler) {
+		void IHandlers<TObject, TBaseStatus>.SetHandler(TBaseStatus status, TBaseStatus overridden, bool increased, bool effect, OnChangedHandler<TObject, TBaseStatus> handler) {
 			if(!onChangedHandlers.ContainsKey(status)) {
-				onChangedHandlers.Add(status, new DefaultValueDictionary<StatusChange<TStatus>, OnChangedHandler<TObject, TStatus>>());
+				onChangedHandlers.Add(status, new DefaultValueDictionary<StatusChange<TBaseStatus>, OnChangedHandler<TObject, TBaseStatus>>());
 			}
-			onChangedHandlers[status][new StatusChange<TStatus>(overridden, increased, effect)] = handler;
+			onChangedHandlers[status][new StatusChange<TBaseStatus>(overridden, increased, effect)] = handler;
 		}
-		OnChangedHandler<TObject, TStatus> IHandlers<TObject, TStatus>.GetHandler(TStatus status, TStatus overridden, bool increased, bool effect) {
+		OnChangedHandler<TObject, TBaseStatus> IHandlers<TObject, TBaseStatus>.GetHandler(TBaseStatus status, TBaseStatus overridden, bool increased, bool effect) {
 			if(!onChangedHandlers.ContainsKey(status)) return null;
-			return onChangedHandlers[status][new StatusChange<TStatus>(overridden, increased, effect)];
+			return onChangedHandlers[status][new StatusChange<TBaseStatus>(overridden, increased, effect)];
 		}
 		//todo: xml note: null is a legal value here, but the user is responsible for ensuring that no OnChanged handlers make use of the 'obj' parameter.
 		protected void CheckRuleErrors() { } //todo
-		public BaseStatusTracker<TObject, TStatus> CreateStatusTracker(TObject obj) {
-			return new BaseStatusTracker<TObject, TStatus>(obj, this);
+		public BaseStatusTracker<TObject, TBaseStatus> CreateStatusTracker(TObject obj) {
+			return new BaseStatusTracker<TObject, TBaseStatus>(obj, this);
 		}
 		public BaseStatusSystem() {
 			DoNothing = (obj, status, ov, nv) => { };
@@ -317,20 +317,20 @@ namespace NewStatusSystems { //todo, remember to change namespace
 			defaultAggs[SourceType.Value] = Total;
 			defaultAggs[SourceType.Suppression] = Bool;
 			defaultAggs[SourceType.Prevention] = Bool;
-			valueAggs = new DefaultValueDictionary<TStatus, Aggregator>();
-			SingleSource = new DefaultHashSet<TStatus>();
-			statusesCancelledBy = new MultiValueDictionary<TStatus, TStatus>();
-			statusesExtendedBy = new MultiValueDictionary<TStatus, TStatus>();
-			statusesThatExtend = new MultiValueDictionary<TStatus, TStatus>();
-			statusesFedBy = new Dictionary<SourceType, MultiValueDictionary<TStatus, TStatus>>();
-			converters = new Dictionary<SourceType, Dictionary<StatusPair<TStatus>, Func<int, int>>>();
-			cancellationConditions = new DefaultValueDictionary<StatusPair<TStatus>, Func<int, bool>>();
+			valueAggs = new DefaultValueDictionary<TBaseStatus, Aggregator>();
+			SingleSource = new DefaultHashSet<TBaseStatus>();
+			statusesCancelledBy = new MultiValueDictionary<TBaseStatus, TBaseStatus>();
+			statusesExtendedBy = new MultiValueDictionary<TBaseStatus, TBaseStatus>();
+			statusesThatExtend = new MultiValueDictionary<TBaseStatus, TBaseStatus>();
+			statusesFedBy = new Dictionary<SourceType, MultiValueDictionary<TBaseStatus, TBaseStatus>>();
+			converters = new Dictionary<SourceType, Dictionary<StatusPair<TBaseStatus>, Func<int, int>>>();
+			cancellationConditions = new DefaultValueDictionary<StatusPair<TBaseStatus>, Func<int, bool>>();
 			foreach(SourceType type in Enum.GetValues(typeof(SourceType))) {
-				statusesFedBy[type] = new MultiValueDictionary<TStatus, TStatus>();
-				converters[type] = new Dictionary<StatusPair<TStatus>, Func<int, int>>();
+				statusesFedBy[type] = new MultiValueDictionary<TBaseStatus, TBaseStatus>();
+				converters[type] = new Dictionary<StatusPair<TBaseStatus>, Func<int, int>>();
 			}
-			onChangedHandlers = new DefaultValueDictionary<TStatus, DefaultValueDictionary<StatusChange<TStatus>, OnChangedHandler<TObject, TStatus>>>();
-			extraPreventionConditions = new MultiValueDictionary<TStatus, Func<TObject, TStatus, bool>>();
+			onChangedHandlers = new DefaultValueDictionary<TBaseStatus, DefaultValueDictionary<StatusChange<TBaseStatus>, OnChangedHandler<TObject, TBaseStatus>>>();
+			extraPreventionConditions = new MultiValueDictionary<TBaseStatus, Func<TObject, TBaseStatus, bool>>();
 		}
 	}
 	public class StatusSystem<TObject> : BaseStatusSystem<TObject, int> {

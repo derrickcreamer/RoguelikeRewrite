@@ -7,15 +7,15 @@ namespace NewStatusSystems { //todo namespace
 
 	using Converter = Func<int, int>;
 
-	public class BaseStatusTracker<TObject, TStatus> where TStatus : struct {
+	public class BaseStatusTracker<TObject, TBaseStatus> where TBaseStatus : struct {
 		protected TObject obj;
-		protected BaseStatusSystem<TObject, TStatus> rules;
+		protected BaseStatusSystem<TObject, TBaseStatus> rules;
 
 		public bool GenerateNoMessages { get; set; }
 		public bool GenerateNoEffects { get; set; }
 
-		private DefaultValueDictionary<TStatus, int> currentActualValues;
-		public int this[TStatus status] {
+		private DefaultValueDictionary<TBaseStatus, int> currentActualValues;
+		public int this[TBaseStatus status] {
 			get { return currentActualValues[status]; }
 			set {
 				if(!rules.SingleSource[status]) throw new InvalidOperationException("'SingleSource' must be true in order to set a value directly.");
@@ -23,48 +23,48 @@ namespace NewStatusSystems { //todo namespace
 					source.Value = value;
 					return; // If any sources exist, change the value of the first one, then return.
 				}
-				Add(new Source<TObject, TStatus>(status, value)); // Otherwise, create a new one.
+				Add(new Source<TObject, TBaseStatus>(status, value)); // Otherwise, create a new one.
 			}
 		}
-		protected static TStatus Convert<TOtherStatus>(TOtherStatus otherStatus) where TOtherStatus : struct {
-			return EnumConverter.Convert<TOtherStatus, TStatus>(otherStatus);
+		protected static TBaseStatus Convert<TStatus>(TStatus status) where TStatus : struct {
+			return EnumConverter.Convert<TStatus, TBaseStatus>(status);
 		}
-		public bool HasStatus(TStatus status) => currentActualValues[status] > 0;
-		public bool HasStatus<TOtherStatus>(TOtherStatus status) where TOtherStatus : struct => HasStatus(Convert(status));
+		public bool HasStatus(TBaseStatus status) => currentActualValues[status] > 0;
+		public bool HasStatus<TStatus>(TStatus status) where TStatus : struct => HasStatus(Convert(status));
 
-		private Dictionary<SourceType, DefaultValueDictionary<TStatus, int>> currentRaw;
+		private Dictionary<SourceType, DefaultValueDictionary<TBaseStatus, int>> currentRaw;
 		//public bool IsSuppressed(TStatus status) => currentRaw[SourceType.Suppression][status] > 0;
 		//public bool IsPrevented(TStatus status) => currentRaw[SourceType.Prevention][status] > 0;
 
-		private Dictionary<SourceType, MultiValueDictionary<TStatus, Source<TObject, TStatus>>> sources;
+		private Dictionary<SourceType, MultiValueDictionary<TBaseStatus, Source<TObject, TBaseStatus>>> sources;
 
-		private Dictionary<SourceType, Dictionary<TStatus, Dictionary<TStatus, int>>> internalFeeds;
+		private Dictionary<SourceType, Dictionary<TBaseStatus, Dictionary<TBaseStatus, int>>> internalFeeds;
 
-		private List<DefaultValueDictionary<StatusChange<TStatus>, OnChangedHandler<TObject, TStatus>>> changeStack;
+		private List<DefaultValueDictionary<StatusChange<TBaseStatus>, OnChangedHandler<TObject, TBaseStatus>>> changeStack;
 
-		internal BaseStatusTracker(TObject obj, BaseStatusSystem<TObject, TStatus> rules) {
+		internal BaseStatusTracker(TObject obj, BaseStatusSystem<TObject, TBaseStatus> rules) {
 			this.obj = obj;
 			this.rules = rules;
 			if(rules != null) rules.TrackerCreated = true;
-			currentActualValues = new DefaultValueDictionary<TStatus, int>();
-			currentRaw = new Dictionary<SourceType, DefaultValueDictionary<TStatus, int>>();
-			sources = new Dictionary<SourceType, MultiValueDictionary<TStatus, Source<TObject, TStatus>>>();
-			internalFeeds = new Dictionary<SourceType, Dictionary<TStatus, Dictionary<TStatus, int>>>();
-			changeStack = new List<DefaultValueDictionary<StatusChange<TStatus>, OnChangedHandler<TObject, TStatus>>>();
+			currentActualValues = new DefaultValueDictionary<TBaseStatus, int>();
+			currentRaw = new Dictionary<SourceType, DefaultValueDictionary<TBaseStatus, int>>();
+			sources = new Dictionary<SourceType, MultiValueDictionary<TBaseStatus, Source<TObject, TBaseStatus>>>();
+			internalFeeds = new Dictionary<SourceType, Dictionary<TBaseStatus, Dictionary<TBaseStatus, int>>>();
+			changeStack = new List<DefaultValueDictionary<StatusChange<TBaseStatus>, OnChangedHandler<TObject, TBaseStatus>>>();
 			foreach(SourceType type in Enum.GetValues(typeof(SourceType))) {
-				currentRaw[type] = new DefaultValueDictionary<TStatus, int>();
-				sources[type] = new MultiValueDictionary<TStatus, Source<TObject, TStatus>>();
-				internalFeeds[type] = new Dictionary<TStatus, Dictionary<TStatus, int>>();
+				currentRaw[type] = new DefaultValueDictionary<TBaseStatus, int>();
+				sources[type] = new MultiValueDictionary<TBaseStatus, Source<TObject, TBaseStatus>>();
+				internalFeeds[type] = new Dictionary<TBaseStatus, Dictionary<TBaseStatus, int>>();
 			}
 		}
 
-		public bool Add(Source<TObject, TStatus> source) {
+		public bool Add(Source<TObject, TBaseStatus> source) {
 			if(source == null) throw new ArgumentNullException();
-			TStatus status = source.Status;
+			TBaseStatus status = source.Status;
 			SourceType type = source.SourceType;
 			if(type == SourceType.Value) {
 				if(currentRaw[SourceType.Prevention][status] > 0) return false;
-				var preventableStatuses = new List<TStatus> { status }.Concat(rules.statusesExtendedBy[status]);
+				var preventableStatuses = new List<TBaseStatus> { status }.Concat(rules.statusesExtendedBy[status]);
 				foreach(var preventableStatus in preventableStatuses) {
 					if(rules.extraPreventionConditions.AnyValues(preventableStatus)) {
 						foreach(var condition in rules.extraPreventionConditions[preventableStatus]) {
@@ -82,22 +82,22 @@ namespace NewStatusSystems { //todo namespace
 			else return false;
 		}
 		//todo: definitely need xml comments for these methods
-		public Source<TObject, TStatus> Add(TStatus status, int value = 1, int priority = 0, SourceType type = SourceType.Value) {
-			var source = new Source<TObject, TStatus>(status, value, priority, type);
+		public Source<TObject, TBaseStatus> Add(TBaseStatus status, int value = 1, int priority = 0, SourceType type = SourceType.Value) {
+			var source = new Source<TObject, TBaseStatus>(status, value, priority, type);
 			if(Add(source)) return source;
 			else return null;
 		}
-		public Source<TObject, TStatus, TOtherStatus> Add<TOtherStatus>(
-			TOtherStatus status, int value = 1, int priority = 0, SourceType type = SourceType.Value)
-			where TOtherStatus : struct
+		public Source<TObject, TBaseStatus, TStatus> Add<TStatus>(
+			TStatus status, int value = 1, int priority = 0, SourceType type = SourceType.Value)
+			where TStatus : struct
 		{
-			var source = new Source<TObject, TStatus, TOtherStatus>(status, value, priority, type);
+			var source = new Source<TObject, TBaseStatus, TStatus>(status, value, priority, type);
 			if(Add(source: source)) return source;
 			else return null;
 		}
-		public bool Remove(Source<TObject, TStatus> source) {
+		public bool Remove(Source<TObject, TBaseStatus> source) {
 			if(source == null) throw new ArgumentNullException();
-			TStatus status = source.Status;
+			TBaseStatus status = source.Status;
 			SourceType type = source.SourceType;
 			if(sources[type].Remove(status, source)) {
 				source.OnValueChanged -= CheckSourceChanged;
@@ -106,34 +106,34 @@ namespace NewStatusSystems { //todo namespace
 			}
 			else return false;
 		}
-		public void Cancel(TStatus status) {
+		public void Cancel(TBaseStatus status) {
 			foreach(var source in sources[SourceType.Value][status].OrderBy(x => x.Priority)) { //todo, check this - make sure it doesn't keep an iterator to valueSources.
 				Remove(source);
 			}
-			foreach(TStatus extendingStatus in rules.statusesThatExtend[status]) Cancel(extendingStatus);
+			foreach(TBaseStatus extendingStatus in rules.statusesThatExtend[status]) Cancel(extendingStatus);
 		}
-		public void Cancel<TOtherStatus>(TOtherStatus status) where TOtherStatus : struct => Cancel(Convert(status));
-		private OnChangedHandler<TObject, TStatus> GetHandler(TStatus status, bool increased, bool effect) {
-			var change = new StatusChange<TStatus>(status, increased, effect);
-			OnChangedHandler<TObject, TStatus> result;
+		public void Cancel<TStatus>(TStatus status) where TStatus : struct => Cancel(Convert(status));
+		private OnChangedHandler<TObject, TBaseStatus> GetHandler(TBaseStatus status, bool increased, bool effect) {
+			var change = new StatusChange<TBaseStatus>(status, increased, effect);
+			OnChangedHandler<TObject, TBaseStatus> result;
 			foreach(var dict in changeStack) {
 				if(dict.TryGetValue(change, out result)) return result;
 			}
 			return null;
 		}
-		private void CheckSourceChanged(Source<TObject, TStatus> source) {
+		private void CheckSourceChanged(Source<TObject, TBaseStatus> source) {
 			bool stacked = source.onChangedOverrides != null;
 			if(stacked) changeStack.Add(source.onChangedOverrides);
 			CheckRawChanged(source.Status, source.SourceType);
 			if(stacked) changeStack.RemoveAt(changeStack.Count - 1);
 		}
-		private void CheckRawChanged(TStatus status, SourceType type) {
+		private void CheckRawChanged(TBaseStatus status, SourceType type) {
 			bool stacked = rules.onChangedHandlers[status] != null;
 			if(stacked) changeStack.Add(rules.onChangedHandlers[status]);
 			var values = sources[type][status].Select(x => x.Value);
 			if(internalFeeds[type].ContainsKey(status)) values = values.Concat(internalFeeds[type][status].Values);
-			IEnumerable<TStatus> upstreamStatuses; //todo: be sure to explain how this works...
-			IEnumerable<TStatus> downstreamStatuses;
+			IEnumerable<TBaseStatus> upstreamStatuses; //todo: be sure to explain how this works...
+			IEnumerable<TBaseStatus> downstreamStatuses;
 			if(type == SourceType.Value) {
 				upstreamStatuses = rules.statusesThatExtend[status];
 				downstreamStatuses = rules.statusesExtendedBy[status];
@@ -142,7 +142,7 @@ namespace NewStatusSystems { //todo namespace
 				upstreamStatuses = rules.statusesExtendedBy[status];
 				downstreamStatuses = rules.statusesThatExtend[status];
 			}
-			foreach(TStatus otherStatus in upstreamStatuses) {
+			foreach(TBaseStatus otherStatus in upstreamStatuses) {
 				values = values.Concat(sources[type][otherStatus].Select(x => x.Value));
 				if(internalFeeds[type].ContainsKey(otherStatus)) values = values.Concat(internalFeeds[type][otherStatus].Values);
 			}
@@ -152,7 +152,7 @@ namespace NewStatusSystems { //todo namespace
 				currentRaw[type][status] = newValue;
 				if(type == SourceType.Value || type == SourceType.Suppression) CheckActualValueChanged(status);
 			}
-			foreach(TStatus otherStatus in downstreamStatuses) {
+			foreach(TBaseStatus otherStatus in downstreamStatuses) {
 				CheckRawChanged(otherStatus, type);
 			}
 			if(stacked) changeStack.RemoveAt(changeStack.Count - 1);
@@ -171,7 +171,7 @@ If not, create a new source with that value, then add it to the target status.
 If the value of this status just increased, using the rules, for each status that is cancelled by this one:
 call Cancel on it, yeah?
 		*/
-		private void CheckActualValueChanged(TStatus status) {
+		private void CheckActualValueChanged(TBaseStatus status) {
 			int newValue;
 			if(currentRaw[SourceType.Suppression][status] > 0) newValue = 0;
 			else newValue = currentRaw[SourceType.Value][status];
@@ -183,8 +183,8 @@ call Cancel on it, yeah?
 				if(!GenerateNoEffects) GetHandler(status, increased, true)?.Invoke(obj, status, oldValue, newValue);
 				UpdateFeed(status, SourceType.Value, newValue);
 				if(increased) {
-					foreach(TStatus cancelledStatus in rules.statusesCancelledBy[status]) {
-						var pair = new StatusPair<TStatus>(status, cancelledStatus);
+					foreach(TBaseStatus cancelledStatus in rules.statusesCancelledBy[status]) {
+						var pair = new StatusPair<TBaseStatus>(status, cancelledStatus);
 						var condition = rules.cancellationConditions[pair]; // if a condition exists, it must return true for the
 						if(condition == null || condition(newValue)) Cancel(cancelledStatus); // status to be cancelled.
 					}
@@ -193,19 +193,19 @@ call Cancel on it, yeah?
 				UpdateFeed(status, SourceType.Prevention, newValue);
 			}
 		}
-		private void UpdateFeed(TStatus status, SourceType type, int newValue) {
-			foreach(TStatus fedStatus in rules.statusesFedBy[type][status]) {
+		private void UpdateFeed(TBaseStatus status, SourceType type, int newValue) {
+			foreach(TBaseStatus fedStatus in rules.statusesFedBy[type][status]) {
 				int newFedValue = newValue;
-				var pair = new StatusPair<TStatus>(status, fedStatus);
+				var pair = new StatusPair<TBaseStatus>(status, fedStatus);
 				Converter conv;
 				if(rules.converters[type].TryGetValue(pair, out conv)) newFedValue = conv(newFedValue);
 				int oldFedValue;
-				Dictionary<TStatus, int> fedValues;
+				Dictionary<TBaseStatus, int> fedValues;
 				if(internalFeeds[type].TryGetValue(fedStatus, out fedValues)) fedValues.TryGetValue(status, out oldFedValue);
 				else oldFedValue = 0;
 				if(newFedValue != oldFedValue) {
 					if(fedValues == null) {
-						fedValues = new Dictionary<TStatus, int>();
+						fedValues = new Dictionary<TBaseStatus, int>();
 						fedValues.Add(status, newFedValue);
 						internalFeeds[type].Add(fedStatus, fedValues);
 					}

@@ -3,14 +3,12 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Collections.Generic;
-
 using System.Reflection;
 
-namespace StatusSystems {
+namespace NewStatusSystems { //todo, namespace name?
 	public static class StatusParser {
-		public static StatusSystem<TObject, TStatus> ParseRulesText<TObject, TStatus>(
-			this StatusSystem<TObject, TStatus> rules, string filename,
-			ExtraEnums extraEnums = null) where TStatus : struct
+		public static BaseStatusSystem<TObject, TBaseStatus> ParseRulesText<TObject, TBaseStatus>(
+			this BaseStatusSystem<TObject, TBaseStatus> rules, string filename) where TBaseStatus : struct
 		{
 			if(!File.Exists(filename)) throw new FileNotFoundException($"{filename} cannot be found here.");
 			List<string> text = new List<string>();
@@ -21,13 +19,12 @@ namespace StatusSystems {
 					text.Add(line);
 				}
 			}
-			return rules.ParseRulesText(text, extraEnums);
+			return rules.ParseRulesText(text);
 		}
-		public static StatusSystem<TObject, TStatus> ParseRulesText<TObject, TStatus>(
-			this StatusSystem<TObject, TStatus> rules, IEnumerable<string> text,
-			ExtraEnums extraEnums = null) where TStatus : struct
+		public static BaseStatusSystem<TObject, TBaseStatus> ParseRulesText<TObject, TBaseStatus>(
+			this BaseStatusSystem<TObject, TBaseStatus> rules, IEnumerable<string> text) where TBaseStatus : struct
 		{
-			new StatusParserInternal<TObject, TStatus>(rules, Tokenize(text), extraEnums).Parse();
+			new StatusParserInternal<TObject, TBaseStatus>(rules, Tokenize(text)).Parse();
 			return rules;
 		}
 		private static List<string> Tokenize(IEnumerable<string> text) {
@@ -67,46 +64,18 @@ namespace StatusSystems {
 		}
 	}
 
-	public class ExtraEnums{ // this could be renamed to work as a generic collection of types (but I wouldn't know what to call it)
-		internal List<Type> extraEnums = new List<Type>();
-		public ExtraEnums(params Type[] enums) {
-			extraEnums.AddRange(enums);
-		}
-		public ExtraEnums Add(params Type[] enums) {
-			extraEnums.AddRange(enums);
-			return this;
-		}
-		// well, at least it looks neat:
-		public static ExtraEnums Create<T1>() => new ExtraEnums(typeof(T1));
-		public static ExtraEnums Create<T1, T2>() => new ExtraEnums(typeof(T1), typeof(T2));
-		public static ExtraEnums Create<T1, T2, T3>() => new ExtraEnums(typeof(T1), typeof(T2), typeof(T3));
-		public static ExtraEnums Create<T1, T2, T3, T4>() => new ExtraEnums(typeof(T1), typeof(T2), typeof(T3), typeof(T4));
-		public static ExtraEnums Create<T1, T2, T3, T4, T5>() => new ExtraEnums(typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5));
-		public static ExtraEnums Create<T1, T2, T3, T4, T5, T6>() => new ExtraEnums(typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6));
-		public static ExtraEnums Create<T1, T2, T3, T4, T5, T6, T7>() => new ExtraEnums(typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7));
-		public static ExtraEnums Create<T1, T2, T3, T4, T5, T6, T7, T8>() => new ExtraEnums(typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8));
-		public ExtraEnums Add<T1>() => Add(typeof(T1));
-		public ExtraEnums Add<T1, T2>() => Add(typeof(T1), typeof(T2));
-		public ExtraEnums Add<T1, T2, T3>() => Add(typeof(T1), typeof(T2), typeof(T3));
-		public ExtraEnums Add<T1, T2, T3, T4>() => Add(typeof(T1), typeof(T2), typeof(T3), typeof(T4));
-		public ExtraEnums Add<T1, T2, T3, T4, T5>() => Add(typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5));
-		public ExtraEnums Add<T1, T2, T3, T4, T5, T6>() => Add(typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6));
-		public ExtraEnums Add<T1, T2, T3, T4, T5, T6, T7>() => Add(typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7));
-		public ExtraEnums Add<T1, T2, T3, T4, T5, T6, T7, T8>() => Add(typeof(T1), typeof(T2), typeof(T3), typeof(T4), typeof(T5), typeof(T6), typeof(T7), typeof(T8));
-	}
-
-	internal class StatusParserInternal<TObject, TStatus> where TStatus : struct {
-		StatusSystem<TObject, TStatus> rules;
+	internal class StatusParserInternal<TObject, TBaseStatus> where TBaseStatus : struct {
+		BaseStatusSystem<TObject, TBaseStatus> rules;
 		List<string> tokens;
 		int idx;
 		string rulesDefaultAggregator;
 		string parserDefaultAggregator;
 		string parserDefaultSourceLimit;
 		List<Type> extraEnums;
-		internal StatusParserInternal(StatusSystem<TObject, TStatus> rules, List<string> tokens, ExtraEnums extraEnums) {
+		internal StatusParserInternal(BaseStatusSystem<TObject, TBaseStatus> rules, List<string> tokens) {
 			this.rules = rules;
 			this.tokens = tokens;
-			this.extraEnums = extraEnums.extraEnums;
+			extraEnums = rules.extraEnumTypes;
 			if(rules.DefaultValueAggregator == rules.Total) rulesDefaultAggregator = "total";
 			else if(rules.DefaultValueAggregator == rules.Bool) rulesDefaultAggregator = "bool";
 			else if(rules.DefaultValueAggregator == rules.MaximumOrZero) rulesDefaultAggregator = "max";
@@ -137,8 +106,8 @@ namespace StatusSystems {
 						break;
 					default: {
 							if(token.IsNumber()) throw new InvalidDataException("Syntax error: Expected status or mode, got number instead.");
-							TStatus status;
-							if(!TryParse(token, out status)) throw new InvalidDataException($"Error: {token} not recognized as part of {typeof(TStatus)}.");
+							TBaseStatus status;
+							if(!TryParse(token, out status)) throw new InvalidDataException($"Error: {token} not recognized as any given type.");
 							++idx;
 							SetAggregator(status, parserDefaultAggregator);
 							SetSourceLimit(status, parserDefaultSourceLimit);
@@ -151,8 +120,8 @@ namespace StatusSystems {
 			}
 		}
 		private static MethodInfo baseTryParse = null;
-		private bool TryParse(string token, out TStatus status) {
-			if(Enum.TryParse(token, true, out status)) return true;
+		private bool TryParse(string token, out TBaseStatus status) {
+			if(typeof(TBaseStatus).IsEnum && Enum.TryParse(token, true, out status)) return true;
 			if(extraEnums != null) {
 				if(baseTryParse == null) {
 					foreach(var method in typeof(Enum).GetMethods()) {
@@ -171,14 +140,15 @@ namespace StatusSystems {
 					object[] mParams = new object[] { token, true, null };
 					bool success = (bool)m.Invoke(null, mParams);
 					if(success) {
-						status = (TStatus)mParams[2];
+						status = (TBaseStatus)mParams[2];
 						return true;
 					}
 				}
 			}
+			status = default(TBaseStatus);
 			return false;
 		}
-		private void SetAggregator(TStatus status, string aggString) {
+		private void SetAggregator(TBaseStatus status, string aggString) {
 			Func<IEnumerable<int>, int> agg = null;
 			if(rulesDefaultAggregator == null || rulesDefaultAggregator != aggString) { //if the rules default agg is something unknown, 
 				switch(aggString) { // or just doesn't match the current one, set it.
@@ -195,7 +165,7 @@ namespace StatusSystems {
 			}
 			rules[status].Aggregator = agg;
 		}
-		private void SetSourceLimit(TStatus status, string limitString) {
+		private void SetSourceLimit(TBaseStatus status, string limitString) {
 			rules[status].SingleSource = (limitString == "single");
 		}
 		private void ConsumeOrError(string targetToken) {
@@ -239,7 +209,7 @@ namespace StatusSystems {
 			}
 			else return false;
 		}
-		private void BeginBlock(TStatus status) {
+		private void BeginBlock(TBaseStatus status) {
 			while(idx < tokens.Count) {
 				string token = tokens[idx];
 				switch(token) {
@@ -257,14 +227,14 @@ namespace StatusSystems {
 			}
 			throw new EndOfStreamException("Unexpected end of file: Expected closing brace '}'.");
 		}
-		private void ReadRule(TStatus status) {
+		private void ReadRule(TBaseStatus status) {
 			string token = tokens[idx];
 			if(token.IsBasicVerb() || token.IsComparisonOperator()) ReadBasicRule(status);
 			else if(token.IsInvertedVerb() || token.IsNumber()) ReadInvertedRule(status);
 			else if(token.IsAggregator() || token.IsSourceLimiter()) ReadOtherRule(status);
 			else throw new InvalidDataException($"Syntax error: Unexpected {token}.");
 		}
-		private void ReadBasicRule(TStatus status){
+		private void ReadBasicRule(TBaseStatus status){
 			string comparisonOperator = null, comparisonValue = null, verb = null, otherStatus = null, fedValue = null;
 			if(TryConsume(StatusParser.IsComparisonOperator, ref comparisonOperator)) {
 				ConsumeOrError(StatusParser.IsNumber, ref comparisonValue);
@@ -279,7 +249,7 @@ namespace StatusSystems {
 				}
 			}
 		}
-		private void ReadInvertedRule(TStatus status){
+		private void ReadInvertedRule(TBaseStatus status){
 			string comparisonOperator = null, comparisonValue = null, verb = null, otherStatus = null, fedValue = null;
 			TryConsume(StatusParser.IsNumber, ref fedValue);
 			ConsumeOrError(StatusParser.IsInvertedVerb, ref verb);
@@ -297,10 +267,10 @@ namespace StatusSystems {
 		}
 		private bool IsStatus(string token){
 			if(token.IsNumber()) return false;
-			TStatus status;
+			TBaseStatus status;
 			return TryParse(token, out status);
 		}
-		private void ReadOtherRule(TStatus status) {
+		private void ReadOtherRule(TBaseStatus status) {
 			string token = tokens[idx];
 			switch(token) {
 				case "total":
@@ -327,12 +297,12 @@ namespace StatusSystems {
 				default: return null;
 			}
 		}
-		private void SetRule(bool inverted, TStatus status, string comparisonOperatorString,
+		private void SetRule(bool inverted, TBaseStatus status, string comparisonOperatorString,
 			string comparisonValueString, string verbString, string otherStatusString, string fedValueString)
 		{
-			TStatus otherStatus;
-			if(!TryParse(otherStatusString, out otherStatus)) throw new InvalidDataException($"Error: {otherStatusString} not recognized as part of {typeof(TStatus)}.");
-			TStatus sourceStatus, targetStatus;
+			TBaseStatus otherStatus;
+			if(!TryParse(otherStatusString, out otherStatus)) throw new InvalidDataException($"Error: {otherStatusString} not recognized as any given type.");
+			TBaseStatus sourceStatus, targetStatus;
 			if(inverted) {
 				sourceStatus = otherStatus;
 				targetStatus = status;
@@ -343,7 +313,7 @@ namespace StatusSystems {
 				targetStatus = otherStatus;
 			}
 			Func<int, bool> condition = GetCondition(comparisonOperatorString, comparisonValueString);
-			if(verbString == "foils" || verbString == "cancels" || verbString == "extends") { // no values allowed for these.
+			if(verbString != "feeds") { // Only feeds can have fed values.
 				if(fedValueString != null) throw new InvalidDataException($"Unexpected value with {verbString}.");
 				if(verbString == "extends") {
 					if(comparisonOperatorString != null || comparisonValueString != null) { // and no conditions for this one.
@@ -353,10 +323,10 @@ namespace StatusSystems {
 			}
 			switch(verbString) {
 				case "foils":
-					rules[sourceStatus].Foils(targetStatus, condition);
+					rules[sourceStatus].Foils(condition, targetStatus);
 					break;
 				case "cancels":
-					rules[sourceStatus].Cancels(targetStatus, condition);
+					rules[sourceStatus].Cancels(condition, targetStatus);
 					break;
 				case "extends":
 					rules[sourceStatus].Extends(targetStatus);
@@ -365,13 +335,13 @@ namespace StatusSystems {
 					if(fedValueString == null) {
 						switch(verbString) {
 							case "feeds":
-								rules[sourceStatus].Feeds(status, condition);
+								rules[sourceStatus].Feeds(condition, status);
 								break;
 							case "suppresses":
-								rules[sourceStatus].Suppresses(status, condition);
+								rules[sourceStatus].Suppresses(condition, status);
 								break;
 							case "prevents":
-								rules[sourceStatus].Prevents(status, condition);
+								rules[sourceStatus].Prevents(condition, status);
 								break;
 						}
 					}
@@ -379,14 +349,14 @@ namespace StatusSystems {
 						int fedValue = int.Parse(fedValueString);
 						switch(verbString) {
 							case "feeds":
-								rules[sourceStatus].Feeds(status, fedValue, condition);
+								rules[sourceStatus].Feeds(fedValue, condition, status);
 								break;
-							case "suppresses":
-								rules[sourceStatus].Suppresses(status, fedValue, condition);
+							/*case "suppresses":
+								rules[sourceStatus].Suppresses(fedValue, condition, status);
 								break;
 							case "prevents":
-								rules[sourceStatus].Prevents(status, fedValue, condition);
-								break;
+								rules[sourceStatus].Prevents(fedValue, condition, status);
+								break;*/
 						}
 					}
 					break;

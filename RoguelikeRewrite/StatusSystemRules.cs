@@ -9,20 +9,8 @@ namespace NewStatusSystems { //todo, remember to change namespace
 	using Aggregator = Func<IEnumerable<int>, int>;
 	using Converter = Func<int, int>;
 
-	[StructLayout(LayoutKind.Explicit)]
-	internal struct SharedEnum<TEnum1, TEnum2> where TEnum1 : struct where TEnum2 : struct {
-		[FieldOffset(0)]
-		public TEnum1 e1;
-		[FieldOffset(0)]
-		public TEnum2 e2;
-	}
-	internal static class EnumConverter {
-		//todo: xml note: This is intended to convert freely (and without boxing) between ints and int-backed enums.
-		public static TResult Convert<T, TResult>(T value) where T : struct where TResult : struct {
-			var shared = new SharedEnum<T, TResult>();
-			shared.e1 = value;
-			return shared.e2;
-		}
+	public static class StatusConverter<T, TResult> {
+		public static Func<T, TResult> Convert;
 	}
 
 	public enum SourceType { Value, Suppression, Prevention };
@@ -112,12 +100,12 @@ namespace NewStatusSystems { //todo, remember to change namespace
 			protected BaseStatusSystem<TObject, TBaseStatus> rules;
 			protected TBaseStatus status;
 			protected static TBaseStatus Convert<TStatus>(TStatus status) where TStatus : struct {
-				return EnumConverter.Convert<TStatus, TBaseStatus>(status);
+				return BaseStatusSystem<TObject, TBaseStatus>.Convert(status);
 			}
 			protected static TBaseStatus[] Convert<TStatus>(TStatus[] statuses) where TStatus : struct {
 				if(statuses == null) return null;
 				var result = new TBaseStatus[statuses.Length];
-				for(int i=0;i<statuses.Length;++i) result[i] = EnumConverter.Convert<TStatus, TBaseStatus>(statuses[i]);
+				for(int i=0;i<statuses.Length;++i) result[i] = BaseStatusSystem<TObject, TBaseStatus>.Convert(statuses[i]);
 				return result;
 			}
 			public StatusHandlers Overrides(TBaseStatus overridden) => new StatusHandlers(rules, status, overridden);
@@ -296,6 +284,7 @@ namespace NewStatusSystems { //todo, remember to change namespace
 				if(trackerCreated) return; // Once true, it stays true and does nothing else.
 				trackerCreated = value; //todo: after trackerCreated is true, should it throw on rule changes?
 				if(value && !IgnoreRuleErrors) CheckRuleErrors();
+				//todo !  should *this* property really check IgnoreRuleErrors? Perhaps it should always call Check, and Check would decide?
 			}
 		}
 		public bool IgnoreRuleErrors { get; set; } //todo: so this is the performance one, right? It ignores ALL of them, no matter how breaking.
@@ -327,14 +316,42 @@ namespace NewStatusSystems { //todo, remember to change namespace
 			return onChangedHandlers[status][new StatusChange<TBaseStatus>(overridden, increased, effect)];
 		}
 		//todo: xml note: null is a legal value here, but the user is responsible for ensuring that no OnChanged handlers make use of the 'obj' parameter.
-		protected void CheckRuleErrors() { } //todo
+		protected void CheckRuleErrors() {
+			if(true) { //todo: if reqConvChecks != null,  if !IgnoreRuleErrors, what else?
+				foreach(var verify in requiredConversionChecks) verify();
+			}
+			//todo, what else?
+			requiredConversionChecks = null; //todo: If this method, or ParseRulesText, could EVER be called more than once,
+			extraEnumTypes = null; // todo:		then this shouldn't be nulled just to save a few bytes of ram.
+		}
 		public BaseStatusTracker<TObject, TBaseStatus> CreateStatusTracker(TObject obj) {
 			return new BaseStatusTracker<TObject, TBaseStatus>(obj, this);
 		}
 		protected static TBaseStatus Convert<TStatus>(TStatus status) where TStatus : struct {
-			return EnumConverter.Convert<TStatus, TBaseStatus>(status);
+			try {
+				return StatusConverter<TStatus, TBaseStatus>.Convert(status);
+			}
+			catch(NullReferenceException) {
+				string tName = typeof(TStatus).Name;
+				string baseName = typeof(TBaseStatus).Name;
+				throw new InvalidOperationException($"No converter found for {tName}. (StatusConverter<{tName}, {baseName}>.Convert must be given a value before defining status rules.)");
+			}
+		}
+		protected List<Action> requiredConversionChecks;
+		internal List<Type> extraEnumTypes;
+		protected void AddConversionCheck<T>() {
+			if(typeof(T).IsEnum) extraEnumTypes.Add(typeof(T));
+			string tName = typeof(T).Name;
+			string baseName = typeof(TBaseStatus).Name;
+			requiredConversionChecks.Add(() => {
+				if(StatusConverter<T, TBaseStatus>.Convert == null) {
+					throw new InvalidOperationException($"No converter found for {tName}. (StatusConverter<{tName}, {baseName}>.Convert must be given a value before creating a status tracker.)");
+				}
+			});
 		}
 		public BaseStatusSystem() {
+			requiredConversionChecks = new List<Action>();
+			extraEnumTypes = new List<Type>();
 			DoNothing = (obj, status, ov, nv) => { };
 			Total = ints => {
 				int total = 0;
@@ -376,10 +393,12 @@ namespace NewStatusSystems { //todo, remember to change namespace
 		new public StatusTracker<TObject> CreateStatusTracker(TObject obj) => new StatusTracker<TObject>(obj, this);
 	}
 	public class StatusSystem<TObject, TStatus1> : StatusSystem<TObject> where TStatus1 : struct {
+		public StatusSystem() { AddConversionCheck<TStatus1>(); }
 		public StatusRules this[TStatus1 status] => new StatusRules(this, Convert(status));
 		new public StatusTracker<TObject, TStatus1> CreateStatusTracker(TObject obj) => new StatusTracker<TObject, TStatus1>(obj, this);
 	}
 	public class StatusSystem<TObject, TStatus1, TStatus2> : StatusSystem<TObject, TStatus1> where TStatus1 : struct where TStatus2 : struct{
+		public StatusSystem() { AddConversionCheck<TStatus2>(); }
 		public StatusRules this[TStatus2 status] => new StatusRules(this, Convert(status));
 		new public StatusTracker<TObject, TStatus1, TStatus2> CreateStatusTracker(TObject obj) => new StatusTracker<TObject, TStatus1, TStatus2>(obj, this);
 	}

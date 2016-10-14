@@ -27,7 +27,7 @@ namespace NewStatusSystems { //todo namespace
 			}
 		}
 		protected static TBaseStatus Convert<TStatus>(TStatus status) where TStatus : struct {
-			return EnumConverter.Convert<TStatus, TBaseStatus>(status);
+			return StatusConverter<TStatus, TBaseStatus>.Convert(status);
 		}
 		public bool HasStatus(TBaseStatus status) => currentActualValues[status] > 0;
 		public bool HasStatus<TStatus>(TStatus status) where TStatus : struct => HasStatus(Convert(status));
@@ -57,7 +57,15 @@ namespace NewStatusSystems { //todo namespace
 				internalFeeds[type] = new Dictionary<TBaseStatus, Dictionary<TBaseStatus, int>>();
 			}
 		}
-
+		public Source<TObject, TBaseStatus> CreateSource(TBaseStatus status, int value = 1, int priority = 0, SourceType type = SourceType.Value) {
+			return new Source<TObject, TBaseStatus>(status, value, priority, type);
+		}
+		public Source<TObject, TBaseStatus, TStatus> CreateSource<TStatus>(
+			TStatus status, int value = 1, int priority = 0, SourceType type = SourceType.Value)
+			where TStatus : struct
+		{
+			return new Source<TObject, TBaseStatus, TStatus>(status, value, priority, type);
+		}
 		public bool AddSource(Source<TObject, TBaseStatus> source) {
 			if(source == null) throw new ArgumentNullException();
 			TBaseStatus status = source.Status;

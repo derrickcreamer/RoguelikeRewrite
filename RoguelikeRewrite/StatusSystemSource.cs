@@ -35,7 +35,7 @@ namespace NewStatusSystems {
 			return onChangedOverrides[new StatusChange<TBaseStatus>(status, increased, effect)];
 		}
 		protected static TBaseStatus Convert<TStatus>(TStatus status) where TStatus : struct {
-			return EnumConverter.Convert<TStatus, TBaseStatus>(status);
+			return StatusConverter<TStatus, TBaseStatus>.Convert(status);
 		}
 		public Source(TBaseStatus status, int value = 1, int priority = 0, SourceType type = SourceType.Value) {
 			Status = status;

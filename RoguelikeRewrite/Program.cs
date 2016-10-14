@@ -1,5 +1,5 @@
 ﻿using System;
-using StatusSystems;
+using NewStatusSystems;
 
 
 namespace RoguelikeRewrite {
@@ -8,9 +8,9 @@ namespace RoguelikeRewrite {
 		public enum Spell { ProtectionFromMentalHarm = Status.Confused + 1, WindForm };
 		public class Actor { }
 		static void Main(string[] args) {
-			var rules = new StatusSystem<Actor,Status>();
+			var rules = new StatusSystem<Actor,Status,Spell>();
 			rules.DefaultValueAggregator = rules.Bool;
-			rules.ParseRulesText("statustest.txt",ExtraEnums.Create<Spell>());
+			rules.ParseRulesText("statustest.txt");
 		}
 	}
 }

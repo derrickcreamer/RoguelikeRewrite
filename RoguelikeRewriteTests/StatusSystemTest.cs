@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using NUnit.Framework;
-using StatusSystems;
+using NewStatusSystems;
 
-namespace NewStatusSystems {
+namespace NewStatusSystemsTests { //todo, rename namespace
 	[TestFixture] public class StatusSystemTest {
 		public enum TestStatus { A = 2, B, C, D = 7, E = -3, F = -999, AlsoD = 7 };
 		public class TestObj { }
@@ -13,6 +13,7 @@ namespace NewStatusSystems {
 		protected StatusTracker<TestObj, TestStatus> tracker;
 
 		[SetUp] public void Initialize() {
+			StatusConverter<TestStatus, int>.Convert = x => (int)x;
 			rules = new StatusSystem<TestObj, TestStatus>();
 			testObj = new TestObj();
 			tracker = rules.CreateStatusTracker(testObj);
@@ -23,19 +24,25 @@ namespace NewStatusSystems {
 				tracker = rules.CreateStatusTracker(null);
 				for(int i = -1000;i<50;++i) Assert.AreEqual(0, tracker[(TestStatus)i]);
 			}
+			[TestCase] public void InitializationExceptions() {
+				StatusConverter<TestStatus, int>.Convert = null;
+				Assert.Throws<InvalidOperationException>(() => new StatusSystem<TestObj, TestStatus>().CreateStatusTracker(testObj));
+				Assert.Throws<InvalidOperationException>(() => new StatusSystem<TestObj, TestStatus>()[TestStatus.A].Feeds(TestStatus.B));
+				StatusConverter<TestStatus, int>.Convert = x => (int)x; // Reset it, because I'm not sure NUnit will.
+			}
 		}
 		[TestFixture] public class Sources : StatusSystemTest {
 			[TestCase] public void BasicSourceOperations() {
 				Assert.Throws<ArgumentNullException>(()=> tracker.AddSource(null));
 				Assert.Throws<ArgumentNullException>(() => tracker.RemoveSource(null));
 				Assert.Throws<ArgumentNullException>(() => new Source<TestObj, TestStatus>(null));
-				Source<TestObj, int> s = new Source<TestObj, int>((int)TestStatus.E, value: 2);
+				Source<TestObj, int> s = new Source<TestObj, int>((int)TestStatus.E, value: 2); // (method #1 of creating Sources)
 				Assert.AreEqual(0, tracker[TestStatus.E]);
 				tracker.AddSource(s);
 				Assert.AreEqual(2, tracker[TestStatus.E]);
 				s.Value = 7;
 				Assert.AreEqual(7, tracker[TestStatus.E]);
-				Source<TestObj, int> s2 = new Source<TestObj, int, TestStatus>(TestStatus.E, value: 6);
+				Source<TestObj, int> s2 = new Source<TestObj, int, TestStatus>(TestStatus.E, value: 6); // (method #2 of creating Sources)
 				tracker.AddSource(s2);
 				Assert.AreEqual(13, tracker[TestStatus.E]);
 				tracker.RemoveSource(s);
@@ -45,8 +52,8 @@ namespace NewStatusSystems {
 			}
 			[TestCase] public void SingleSource() {
 				rules[TestStatus.C].SingleSource = true;
-				var s = new Source<TestObj, int, TestStatus>(TestStatus.C, value: 2);
-				var s2 = new Source<TestObj, int, TestStatus>(TestStatus.C, value: 7);
+				var s = tracker.CreateSource(TestStatus.C, value: 2); // (method #3 of creating Sources)
+				var s2 = tracker.CreateSource(TestStatus.C, value: 7);
 				tracker.AddSource(s);
 				tracker.AddSource(s2);
 				Assert.AreEqual(7, tracker[TestStatus.C]);
@@ -68,9 +75,9 @@ namespace NewStatusSystems {
 				tracker[TestStatus.D] = 11;
 				Assert.AreEqual(11, tracker[TestStatus.AlsoD]);
 			}
-			[TestCase] public void NonEnumStatusStillWorks() {
-				StatusSystem<TestObj, char> charRules = new StatusSystem<TestObj, char>();
-				StatusTracker<TestObj, char> charTracker = charRules.CreateStatusTracker(testObj);
+			[TestCase] public void NonIntBaseStatus() {
+				BaseStatusSystem<TestObj, char> charRules = new BaseStatusSystem<TestObj, char>();
+				BaseStatusTracker<TestObj, char> charTracker = charRules.CreateStatusTracker(testObj);
 				charTracker.Add('@');
 				Assert.AreEqual(1, charTracker['@']);
 			}
@@ -126,8 +133,8 @@ namespace NewStatusSystems {
 				Assert.AreEqual(3, tracker[TestStatus.B]);
 			}
 			[TestCase] public void FeedsCustom() {
-				rules[TestStatus.A].Feeds(6, i => i%2 == 0, TestStatus.B); // "Feed 6 into B if A is even."
-				tracker.Add(TestStatus.A, value: 3);
+				rules[TestStatus.A].Feeds(6, i => i%2 != 0, TestStatus.B); // "Feed 6 into B if A is odd."
+				tracker.Add(TestStatus.A, value: 4);
 				Assert.AreEqual(0, tracker[TestStatus.B]);
 				tracker.Add(TestStatus.A, value: -1);
 				Assert.AreEqual(6, tracker[TestStatus.B]);
@@ -305,6 +312,25 @@ namespace NewStatusSystems {
 				tracker.Add(TestStatus.A);
 				Assert.AreEqual(0, i);
 				Assert.AreEqual(7, j);
+			}
+		}
+		[TestFixture] public class MultipleEnums : StatusSystemTest {
+			public enum OtherStatus { One = 8, Two }; // (Carefully) start at 8 because TestStatus ends at 7.
+			[TestCase] public void BasicMultipleEnumOperations() {
+				StatusConverter<OtherStatus, int>.Convert = x => (int)x;
+				var mRules = new StatusSystem<TestObj, OtherStatus, TestStatus>(); // Int base. Using OtherStatus and TestStatus.
+				mRules[TestStatus.A].SingleSource = true;
+				mRules[OtherStatus.One].Cancels(TestStatus.A);
+				mRules[TestStatus.F].Feeds(OtherStatus.One);
+				mRules[OtherStatus.Two].Feeds(3, TestStatus.F);
+				var mTracker = mRules.CreateStatusTracker(testObj);
+				mTracker[TestStatus.A] = 22;
+				Assert.AreEqual(22, mTracker[TestStatus.A]);
+				mTracker.Add(OtherStatus.Two, 5);
+				Assert.AreEqual(5, mTracker[OtherStatus.Two]);
+				Assert.AreEqual(3, mTracker[TestStatus.F]);
+				Assert.AreEqual(3, mTracker[OtherStatus.One]);
+				Assert.AreEqual(0, mTracker[TestStatus.A]);
 			}
 		}
 	}

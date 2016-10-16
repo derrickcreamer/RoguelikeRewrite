@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using NewStatusSystems;
 
@@ -331,6 +332,45 @@ namespace NewStatusSystemsTests { //todo, rename namespace
 				Assert.AreEqual(3, mTracker[TestStatus.F]);
 				Assert.AreEqual(3, mTracker[OtherStatus.One]);
 				Assert.AreEqual(0, mTracker[TestStatus.A]);
+			}
+		}
+		[TestFixture] public class Parser : StatusSystemTest {
+			public enum RPS { Rock, Paper, Scissors, NumChoices };
+			public enum RGB { Red = RPS.NumChoices, Green, Blue };
+			public static readonly List<string> rps1 = new List<string> {
+				"rock foils scissors",
+				"scissors foils paper",
+				"paper foils rock"
+			};
+			public static readonly List<string> rgb1 = new List<string> {
+				"",
+				"red{ # a block and a comment",
+				" feeds blue; cancels green",
+				"}",
+				"green == 4 feeds blue 2"
+			};
+			public static readonly List<string> rps_rgb1 = new List<string> {
+				"paper>2 suppresses green, blue;  red feeds paper"
+			};
+			[TestCase] public void BasicParserOperations() {
+				Assert.Throws<System.IO.InvalidDataException>(() => new StatusSystem<TestObj>().ParseRulesText(rps1));
+				StatusConverter<RPS, int>.Convert = i => (int)i;
+				StatusConverter<RGB, int>.Convert = i => (int)i;
+				var pRules = new StatusSystem<TestObj, RPS, RGB>();
+				pRules.ParseRulesText(rps1.Concat(rgb1).Concat(rps_rgb1));
+				var pTracker = pRules.CreateStatusTracker(testObj);
+				pTracker.Add(RPS.Rock);
+				pTracker.Add(RGB.Red);
+				Assert.AreEqual(0, pTracker[RPS.Rock]); // Red fed Paper which cancelled Rock.
+			}
+			[TestCase] public void SingleStatusParserOperations() {
+				var baseRules = new BaseStatusSystem<TestObj, RGB>();
+				baseRules.ParseRulesText(rgb1);
+				var baseTracker = baseRules.CreateStatusTracker(testObj);
+				baseTracker.Add(RGB.Green, 3);
+				baseTracker.Add(RGB.Red);
+				baseTracker.Add(RGB.Green, 4);
+				Assert.AreEqual(3, baseTracker[RGB.Blue]); // 1 from red, 2 from green.
 			}
 		}
 	}

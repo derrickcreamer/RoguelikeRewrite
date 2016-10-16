@@ -335,13 +335,13 @@ namespace NewStatusSystems { //todo, namespace name?
 					if(fedValueString == null) {
 						switch(verbString) {
 							case "feeds":
-								rules[sourceStatus].Feeds(condition, status);
+								rules[sourceStatus].Feeds(condition, targetStatus);
 								break;
 							case "suppresses":
-								rules[sourceStatus].Suppresses(condition, status);
+								rules[sourceStatus].Suppresses(condition, targetStatus);
 								break;
 							case "prevents":
-								rules[sourceStatus].Prevents(condition, status);
+								rules[sourceStatus].Prevents(condition, targetStatus);
 								break;
 						}
 					}
@@ -349,13 +349,13 @@ namespace NewStatusSystems { //todo, namespace name?
 						int fedValue = int.Parse(fedValueString);
 						switch(verbString) {
 							case "feeds":
-								rules[sourceStatus].Feeds(fedValue, condition, status);
+								rules[sourceStatus].Feeds(fedValue, condition, targetStatus);
 								break;
 							/*case "suppresses":
-								rules[sourceStatus].Suppresses(fedValue, condition, status);
+								rules[sourceStatus].Suppresses(fedValue, condition, targetStatus);
 								break;
 							case "prevents":
-								rules[sourceStatus].Prevents(fedValue, condition, status);
+								rules[sourceStatus].Prevents(fedValue, condition, targetStatus);
 								break;*/
 						}
 					}

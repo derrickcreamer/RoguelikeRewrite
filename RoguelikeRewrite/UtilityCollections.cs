@@ -52,6 +52,14 @@ namespace UtilityCollections {
 				}
 			}
 		}
+		public IEnumerable<TKey> GetAllKeys() => d.Keys;
+		public IEnumerable<TValue> GetAllValues() {
+			foreach(var collection in d.Values) {
+				foreach(var v in collection) {
+					yield return v;
+				}
+			}
+		}
 		public IEnumerable<TValue> this[TKey key] {
 			get {
 				if(d.ContainsKey(key)) return d[key];
@@ -59,12 +67,16 @@ namespace UtilityCollections {
 			}
 			//todo: xml: This one replaces the entire contents of this key.
 			set {
-				ICollection<TValue> coll = createCollection();
-				foreach(TValue v in value) {
-					coll.Add(v);
+				if(value == null) {
+					d.Remove(key);
 				}
-				if(d.ContainsKey(key)) d[key] = coll;
-				else d.Add(key, coll);
+				else {
+					ICollection<TValue> coll = createCollection();
+					foreach(TValue v in value) {
+						coll.Add(v);
+					}
+					d[key] = coll;
+				}
 			}
 		}
 		public void Add(TKey key, TValue value) {

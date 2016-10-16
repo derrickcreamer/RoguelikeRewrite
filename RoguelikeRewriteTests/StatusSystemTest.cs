@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using NUnit.Framework;
-using NewStatusSystems;
+using StatusSystems;
 
-namespace NewStatusSystemsTests { //todo, rename namespace
+namespace StatusSystemsTests {
 	[TestFixture] public class StatusSystemTest {
 		public enum TestStatus { A = 2, B, C, D = 7, E = -3, F = -999, AlsoD = 7 };
 		public class TestObj { }
@@ -332,6 +333,20 @@ namespace NewStatusSystemsTests { //todo, rename namespace
 				Assert.AreEqual(3, mTracker[TestStatus.F]);
 				Assert.AreEqual(3, mTracker[OtherStatus.One]);
 				Assert.AreEqual(0, mTracker[TestStatus.A]);
+			}
+		}
+		[TestFixture] public class RuleChecker : StatusSystemTest {
+			[TestCase] public void InfiniteFeedIllegal() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Feeds(TestStatus.A);
+				Assert.Throws<InvalidDataException>(() => checkedRules.CreateStatusTracker(testObj));
+			}
+			[TestCase] public void SelfSuppressionIllegal() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Feeds(TestStatus.B);
+				checkedRules[TestStatus.B].Extends(TestStatus.C);
+				checkedRules[TestStatus.C].Suppresses(TestStatus.A);
+				Assert.Throws<InvalidDataException>(() => checkedRules.CreateStatusTracker(testObj));
 			}
 		}
 		[TestFixture] public class Parser : StatusSystemTest {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UtilityCollections;
 
-namespace NewStatusSystems { //todo namespace
+namespace StatusSystems {
 
 	using Converter = Func<int, int>;
 

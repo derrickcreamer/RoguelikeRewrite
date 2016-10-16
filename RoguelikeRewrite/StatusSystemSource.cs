@@ -1,7 +1,7 @@
 ﻿using System;
 using UtilityCollections;
 
-namespace NewStatusSystems {
+namespace StatusSystems {
 	public class Source<TObject, TBaseStatus> : IHandlers<TObject, TBaseStatus> where TBaseStatus : struct {
 		public readonly TBaseStatus Status;
 		public readonly SourceType SourceType;

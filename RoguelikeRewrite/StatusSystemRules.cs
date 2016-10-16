@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
+using System.IO;
 using UtilityCollections;
 
-namespace NewStatusSystems { //todo, remember to change namespace
+namespace StatusSystems {
 
 	using Aggregator = Func<IEnumerable<int>, int>;
 	using Converter = Func<int, int>;
@@ -277,18 +277,6 @@ namespace NewStatusSystems { //todo, remember to change namespace
 		}
 		internal DefaultValueDictionary<StatusPair<TBaseStatus>, Func<int, bool>> cancellationConditions;
 
-		protected bool trackerCreated;
-		internal bool TrackerCreated {
-			get { return trackerCreated; }
-			set {
-				if(trackerCreated) return; // Once true, it stays true and does nothing else.
-				trackerCreated = value; //todo: after trackerCreated is true, should it throw on rule changes?
-				if(value && !IgnoreRuleErrors) CheckRuleErrors();
-				//todo !  should *this* property really check IgnoreRuleErrors? Perhaps it should always call Check, and Check would decide?
-			}
-		}
-		public bool IgnoreRuleErrors { get; set; } //todo: so this is the performance one, right? It ignores ALL of them, no matter how breaking.
-
 		public readonly OnChangedHandler<TObject, TBaseStatus> DoNothing;
 		public readonly Aggregator Total;
 		public readonly Aggregator Bool;
@@ -315,15 +303,38 @@ namespace NewStatusSystems { //todo, remember to change namespace
 			if(!onChangedHandlers.ContainsKey(status)) return null;
 			return onChangedHandlers[status][new StatusChange<TBaseStatus>(overridden, increased, effect)];
 		}
-		//todo: xml note: null is a legal value here, but the user is responsible for ensuring that no OnChanged handlers make use of the 'obj' parameter.
-		protected void CheckRuleErrors() {
-			if(true) { //todo: if reqConvChecks != null,  if !IgnoreRuleErrors, what else?
-				foreach(var verify in requiredConversionChecks) verify();
+
+		//todo xml: For performance. If true, it doesn't look for rule errors at all.
+		public bool IgnoreRuleErrors { get; set; }
+
+		protected bool trackerCreated;
+		internal bool TrackerCreated {
+			get { return trackerCreated; }
+			set {
+				if(trackerCreated) return; // Once true, it stays true and does nothing else.
+				trackerCreated = value; // (One possible safety feature: After a tracker has been created, throw on further rule changes.)
+				if(value) CheckRuleErrors();
 			}
-			//todo, what else?
-			requiredConversionChecks = null; //todo: If this method, or ParseRulesText, could EVER be called more than once,
-			extraEnumTypes = null; // todo:		then this shouldn't be nulled just to save a few bytes of ram.
 		}
+		protected void CheckRuleErrors() {
+			if(!IgnoreRuleErrors) {
+				if(requiredConversionChecks != null) {
+					foreach(var verify in requiredConversionChecks) verify();
+				}
+				var ruleChecker = new RuleChecker<TObject, TBaseStatus>(this);
+				var errorList = ruleChecker.GetErrors();
+				if(errorList.Count > 0) {
+					throw new InvalidDataException("Illegal rules detected:     \r\n" + string.Join("     \r\n", errorList));
+				}
+				//todo, what else?
+			}
+		}
+		public List<string> GetRuleErrorsAndWarnings() {
+			var ruleChecker = new RuleChecker<TObject, TBaseStatus>(this);
+			return ruleChecker.GetErrors().Concat(ruleChecker.GetWarnings()).ToList();
+		}
+
+		//todo: xml note: null is a legal value here, but the user is responsible for ensuring that no OnChanged handlers make use of the 'obj' parameter.
 		public BaseStatusTracker<TObject, TBaseStatus> CreateStatusTracker(TObject obj) {
 			return new BaseStatusTracker<TObject, TBaseStatus>(obj, this);
 		}

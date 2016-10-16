@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using System.Collections.Generic;
 using System.Reflection;
 
-namespace NewStatusSystems { //todo, namespace name?
+namespace StatusSystems {
 	public static class StatusParser {
 		public static BaseStatusSystem<TObject, TBaseStatus> ParseRulesText<TObject, TBaseStatus>(
 			this BaseStatusSystem<TObject, TBaseStatus> rules, string filename) where TBaseStatus : struct

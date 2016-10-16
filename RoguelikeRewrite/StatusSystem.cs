@@ -4,7 +4,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using UtilityCollections;
 
-namespace StatusSystems {
+namespace OldStatusSystems {
 	using Aggregator = Func<IEnumerable<int>, int>;
 	using Converter = Func<int, int>;
 	//sure wish I could use type params with 'using':

@@ -155,7 +155,7 @@ namespace StatusSystems {
 				if(foiledStatuses.Length == 0) throw new ArgumentException(StatusExpected);
 				Cancels(foiledStatuses);
 				Suppresses(foiledStatuses);
-				Prevents(foiledStatuses); //todo: what about cycles?
+				Prevents(foiledStatuses);
 			}
 			public void Foils<TStatus>(params TStatus[] foiledStatuses) where TStatus : struct => Foils(Convert(foiledStatuses));
 			public void Foils(Func<int, bool> condition, params TBaseStatus[] foiledStatuses) {
@@ -281,7 +281,6 @@ namespace StatusSystems {
 		public readonly Aggregator Total;
 		public readonly Aggregator Bool;
 		public readonly Aggregator MaximumOrZero;
-		//todo: helpers for creating conditional converters?
 
 		internal DefaultValueDictionary<TBaseStatus, DefaultValueDictionary<StatusChange<TBaseStatus>, OnChangedHandler<TObject, TBaseStatus>>> onChangedHandlers;
 		internal MultiValueDictionary<TBaseStatus, Func<TObject, TBaseStatus, bool>> extraPreventionConditions;
@@ -318,20 +317,23 @@ namespace StatusSystems {
 		}
 		protected void CheckRuleErrors() {
 			if(!IgnoreRuleErrors) {
-				if(requiredConversionChecks != null) {
-					foreach(var verify in requiredConversionChecks) verify();
-				}
+				VerifyConversions();
 				var ruleChecker = new RuleChecker<TObject, TBaseStatus>(this);
-				var errorList = ruleChecker.GetErrors();
+				var errorList = ruleChecker.GetErrors(false);
 				if(errorList.Count > 0) {
 					throw new InvalidDataException("Illegal rules detected:     \r\n" + string.Join("     \r\n", errorList));
 				}
-				//todo, what else?
+			}
+		}
+		private void VerifyConversions() {
+			if(requiredConversionChecks != null) {
+				foreach(var verify in requiredConversionChecks) verify();
 			}
 		}
 		public List<string> GetRuleErrorsAndWarnings() {
+			VerifyConversions();
 			var ruleChecker = new RuleChecker<TObject, TBaseStatus>(this);
-			return ruleChecker.GetErrors().Concat(ruleChecker.GetWarnings()).ToList();
+			return ruleChecker.GetErrors(true);
 		}
 
 		//todo: xml note: null is a legal value here, but the user is responsible for ensuring that no OnChanged handlers make use of the 'obj' parameter.

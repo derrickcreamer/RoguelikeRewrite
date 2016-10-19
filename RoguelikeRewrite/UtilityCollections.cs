@@ -12,6 +12,9 @@ namespace UtilityCollections {
 				else Remove(t);
 			}
 		}
+		public DefaultHashSet() { }
+		public DefaultHashSet(IEqualityComparer<T> comparer) : base(comparer) { }
+		public DefaultHashSet(IEnumerable<T> collection, IEqualityComparer<T> comparer = null) : base(collection, comparer) { }
 	}
 	public class DefaultValueDictionary<TKey, TValue> : Dictionary<TKey, TValue> {
 		new public TValue this[TKey key] {
@@ -24,6 +27,10 @@ namespace UtilityCollections {
 				base[key] = value;
 			}
 		}
+		public DefaultValueDictionary() { }
+		public DefaultValueDictionary(IEqualityComparer<TKey> comparer) : base(comparer) { }
+		public DefaultValueDictionary(IDictionary<TKey, TValue> dictionary, IEqualityComparer<TKey> comparer = null)
+			: base(dictionary, comparer) { }
 	}
 
 	public class MultiValueDictionary<TKey, TValue> : IEnumerable<KeyValuePair<TKey, IEnumerable<TValue>>> {
@@ -33,12 +40,21 @@ namespace UtilityCollections {
 			d = new Dictionary<TKey, ICollection<TValue>>();
 			createCollection = () => new List<TValue>();
 		}
-		private MultiValueDictionary(Func<ICollection<TValue>> createCollection) {
-			d = new Dictionary<TKey, ICollection<TValue>>();
+		public MultiValueDictionary(IEqualityComparer<TKey> comparer) {
+			d = new Dictionary<TKey, ICollection<TValue>>(comparer);
+			createCollection = () => new List<TValue>();
+		}
+		private MultiValueDictionary(Func<ICollection<TValue>> createCollection, IEqualityComparer<TKey> comparer = null) {
+			d = new Dictionary<TKey, ICollection<TValue>>(comparer);
 			this.createCollection = createCollection;
 		}
 		public static MultiValueDictionary<TKey, TValue> Create<TCollection>() where TCollection : ICollection<TValue>, new() {
 			return new MultiValueDictionary<TKey, TValue>(() => new TCollection());
+		}
+		public static MultiValueDictionary<TKey, TValue> Create<TCollection>(IEqualityComparer<TKey> comparer)
+			where TCollection : ICollection<TValue>, new()
+		{
+			return new MultiValueDictionary<TKey, TValue>(() => new TCollection(), comparer);
 		}
 		IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
 		//todo: xml note that empty collections can be returned?

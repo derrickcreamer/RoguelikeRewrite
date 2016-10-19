@@ -348,6 +348,105 @@ namespace StatusSystemsTests {
 				checkedRules[TestStatus.C].Suppresses(TestStatus.A);
 				Assert.Throws<InvalidDataException>(() => checkedRules.CreateStatusTracker(testObj));
 			}
+			[TestCase] public void SuppressionCycleIllegal() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Suppresses(TestStatus.B);
+				checkedRules[TestStatus.B].Suppresses(TestStatus.C);
+				checkedRules[TestStatus.C].Suppresses(TestStatus.A);
+				Assert.Throws<InvalidDataException>(() => checkedRules.CreateStatusTracker(testObj));
+			}
+			[TestCase] public void ConditionalSuppressionCycleWarning() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Suppresses(i => i < 4, TestStatus.B); // With a condition.
+				checkedRules[TestStatus.B].Suppresses(TestStatus.C);
+				checkedRules[TestStatus.C].Suppresses(TestStatus.A);
+				var errors = checkedRules.GetRuleErrorsAndWarnings();
+				Assert.AreEqual(1, errors.Count); // Just one warning.
+				Assert.IsTrue(errors[0].StartsWith("CRITICAL WARNING"));
+				checkedRules.CreateStatusTracker(testObj); // No exception.
+			}
+			[TestCase] public void BrokenSuppressionCycleOkay() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Suppresses(TestStatus.B);
+				checkedRules[TestStatus.B].Suppresses(TestStatus.C);
+				checkedRules[TestStatus.C].Suppresses(TestStatus.A);
+				checkedRules[TestStatus.C].Cancels(TestStatus.A);
+				var errors = checkedRules.GetRuleErrorsAndWarnings();
+				Assert.AreEqual(1, errors.Count); // Just one warning.
+				Assert.IsTrue(errors[0].StartsWith("OKAY"));
+				checkedRules.CreateStatusTracker(testObj); // No exception.
+			}
+			[TestCase] public void ReversedSuppressionCycleDetected() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Prevents(TestStatus.B);
+				checkedRules[TestStatus.B].Prevents(TestStatus.C); // One cycle in one direction.
+				checkedRules[TestStatus.C].Prevents(TestStatus.A);
+				checkedRules[TestStatus.A].Cancels(TestStatus.C);
+				checkedRules[TestStatus.B].Cancels(TestStatus.A); // Another in the opposite direction.
+				checkedRules[TestStatus.C].Cancels(TestStatus.B);
+				Assert.AreEqual(2, checkedRules.GetRuleErrorsAndWarnings().Count); // One warning for each.
+				checkedRules.CreateStatusTracker(testObj); // No exception.
+			}
+			[TestCase] public void SingleErrorForLargeSuppressionCycle() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Suppresses(TestStatus.B);
+				checkedRules[TestStatus.B].Suppresses(TestStatus.C);
+				checkedRules[TestStatus.C].Suppresses(TestStatus.D);
+				checkedRules[TestStatus.D].Extends(TestStatus.E);
+				checkedRules[TestStatus.E].Suppresses(TestStatus.F); // 5 suppressions in 7 links.
+				checkedRules[TestStatus.F].Feeds((TestStatus)55);
+				checkedRules[55].Suppresses(TestStatus.A);
+				var errors = checkedRules.GetRuleErrorsAndWarnings();
+				Assert.AreEqual(1, errors.Count); // Just one error.
+			}
+			[TestCase] public void FeedPlusExtendWarning() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Feeds(TestStatus.B);
+				checkedRules[TestStatus.A].Extends(TestStatus.B);
+				var errors = checkedRules.GetRuleErrorsAndWarnings();
+				Assert.AreEqual(1, errors.Count); // Just one warning.
+				Assert.IsTrue(errors[0].StartsWith("WARNING"));
+				checkedRules.CreateStatusTracker(testObj); // No exception.
+			}
+			[TestCase] public void NegativePlusPositiveWarning() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Feeds(TestStatus.B);
+				checkedRules[TestStatus.A].Cancels(TestStatus.B);
+				checkedRules[TestStatus.A].Suppresses(TestStatus.B);
+				var errors = checkedRules.GetRuleErrorsAndWarnings();
+				Assert.AreEqual(1, errors.Count); // Just one warning.
+				Assert.IsTrue(errors[0].StartsWith("WARNING"));
+				checkedRules.CreateStatusTracker(testObj); // No exception.
+			}
+			[TestCase] public void MutualSuppressionWarning() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.A].Suppresses(TestStatus.B);
+				checkedRules[TestStatus.B].Suppresses(TestStatus.A);
+				var errors = checkedRules.GetRuleErrorsAndWarnings();
+				Assert.AreEqual(1, errors.Count); // Just one warning.
+				Assert.IsTrue(errors[0].StartsWith("WARNING"));
+				checkedRules.CreateStatusTracker(testObj); // No exception.
+			}
+			[TestCase] public void InconsistentAggregatorWarning() {
+				var checkedRules = new StatusSystem<TestObj, TestStatus>();
+				checkedRules[TestStatus.B].Extends(TestStatus.A);
+				checkedRules[TestStatus.A].Aggregator = checkedRules.MaximumOrZero;
+				var errors = checkedRules.GetRuleErrorsAndWarnings();
+				Assert.AreEqual(1, errors.Count); // Just one warning.
+				Assert.IsTrue(errors[0].StartsWith("WARNING"));
+				checkedRules.CreateStatusTracker(testObj); // No exception.
+			}
+			public enum OverlapOne { Red = 4, Green = 4, Blue = 3 };
+			public enum OverlapTwo { Red = 5, Green = 5, Blue = 4 };
+			[TestCase] public void OverlappingEnumValueWarning() {
+				StatusConverter<OverlapOne, int>.Convert = i => (int)i;
+				StatusConverter<OverlapTwo, int>.Convert = i => (int)i;
+				var checkedRules = new StatusSystem<TestObj, OverlapOne, OverlapTwo>();
+				var errors = checkedRules.GetRuleErrorsAndWarnings();
+				Assert.AreEqual(1, errors.Count); // Just one warning: Shared value (4).
+				Assert.IsTrue(errors[0].StartsWith("WARNING"));
+				checkedRules.CreateStatusTracker(testObj); // No exception.
+			}
 		}
 		[TestFixture] public class Parser : StatusSystemTest {
 			public enum RPS { Rock, Paper, Scissors, NumChoices };

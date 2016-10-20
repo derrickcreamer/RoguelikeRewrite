@@ -43,12 +43,6 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="StatusSystemParser.cs" />
-    <Compile Include="StatusSystem.cs" />
-    <Compile Include="StatusSystemRuleChecker.cs" />
-    <Compile Include="StatusSystemRules.cs" />
-    <Compile Include="StatusSystemSource.cs" />
-    <Compile Include="StatusSystemTracker.cs" />
     <Compile Include="UtilityCollections.cs" />
     <Compile Include="Game.cs" />
     <Compile Include="Grid.cs" />

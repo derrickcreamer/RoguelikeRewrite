@@ -19,13 +19,31 @@ namespace StatusSystems {
 		public int Priority { get; set; }
 		//todo: xml/docs, explain this one
 		public bool TryGetStatus<TStatus>(out TStatus status) where TStatus : struct {
-			status = (TStatus)(object)this.Status; //todo, switch to better converter?
-			return Enum.IsDefined(typeof(TStatus), this.Status); //todo! This obviously only works for enums. What to do?
+			if(StatusConverter<TBaseStatus, TStatus>.Convert != null) {
+				status = StatusConverter<TBaseStatus, TStatus>.Convert(this.Status);
+				return true;
+			}
+			try {
+				status = (TStatus)(object)this.Status;
+			}
+			catch(InvalidCastException) {
+				status = default(TStatus);
+				return false;
+			}
+			if(typeof(TStatus).IsEnum) {
+				try {
+					return Enum.IsDefined(typeof(TStatus), this.Status);
+				}
+				catch(ArgumentException) {
+					return false;
+				}
+			}
+			return true; // I guess this should return true. If it isn't an enum, all we know is that the cast was successful.
 		}
 		internal DefaultValueDictionary<StatusChange<TBaseStatus>, OnChangedHandler<TObject, TBaseStatus>> onChangedOverrides;
 		public BaseStatusSystem<TObject, TBaseStatus>.StatusHandlers Overrides(TBaseStatus overridden) => new BaseStatusSystem<TObject, TBaseStatus>.StatusHandlers(this, Status, overridden);
 		public BaseStatusSystem<TObject, TBaseStatus>.StatusHandlers Overrides<TStatus>(TStatus overridden) where TStatus : struct
-			=> new BaseStatusSystem<TObject, TBaseStatus>.StatusHandlers(this, Status, Convert(overridden)); //todo: Just make sure this one works.
+			=> new BaseStatusSystem<TObject, TBaseStatus>.StatusHandlers(this, Status, Convert(overridden));
 		void IHandlers<TObject, TBaseStatus>.SetHandler(TBaseStatus ignored, TBaseStatus overridden, bool increased, bool effect, OnChangedHandler<TObject, TBaseStatus> handler) {
 			if(onChangedOverrides == null) onChangedOverrides = new DefaultValueDictionary<StatusChange<TBaseStatus>, OnChangedHandler<TObject, TBaseStatus>>();
 			onChangedOverrides[new StatusChange<TBaseStatus>(overridden, increased, effect)] = handler;
@@ -65,7 +83,7 @@ namespace StatusSystems {
 			this.Status = status;
 			this.BaseStatus = Convert(status);
 		}
-		new public readonly TStatus Status; //todo make sure this *works* well.
+		new public readonly TStatus Status;
 		public readonly TBaseStatus BaseStatus;
 	}
 }

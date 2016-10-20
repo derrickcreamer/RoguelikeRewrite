@@ -80,8 +80,8 @@ namespace StatusSystems {
 						}
 					}
 				}
+				if(rules.SingleSource[status]) sources[SourceType.Value].Clear(status);
 			}
-			if(rules.SingleSource[status]) sources[type].Clear(status); //todo, test this
 			if(sources[type].AddUnique(status, source)) {
 				source.OnValueChanged += CheckSourceChanged;
 				CheckSourceChanged(source);
@@ -115,7 +115,7 @@ namespace StatusSystems {
 			else return false;
 		}
 		public void Cancel(TBaseStatus status) {
-			foreach(var source in sources[SourceType.Value][status].OrderBy(x => x.Priority)) { //todo, check this - make sure it doesn't keep an iterator to valueSources.
+			foreach(var source in sources[SourceType.Value][status].OrderBy(x => x.Priority)) {
 				RemoveSource(source);
 			}
 			foreach(TBaseStatus extendingStatus in rules.statusesThatExtend[status]) Cancel(extendingStatus);

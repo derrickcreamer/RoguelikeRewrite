@@ -169,4 +169,83 @@ namespace UtilityCollections { // Updated 2016-10-25
 			return d.TryGetValue(key, out values) && values.Any();
 		}
 	}
+	public class PriorityQueue<T, TSortKey> : IEnumerable<T>, IReadOnlyCollection<T> {
+		public PriorityQueue(Func<T, TSortKey> keySelector, bool descending = false)
+			: this(keySelector, Comparer<TSortKey>.Default.Compare, descending) { }
+		public PriorityQueue(Func<T, TSortKey> keySelector, Func<TSortKey, TSortKey, int> compare, bool descending = false) {
+			if(compare == null) compare = Comparer<TSortKey>.Default.Compare;
+			set = new SortedSet<pqElement>(new PriorityQueueComparer(descending, keySelector, compare));
+			DescendingOrder = descending;
+		}
+		public PriorityQueue(Func<T, TSortKey> keySelector, IEnumerable<T> collection, Func<TSortKey, TSortKey, int> compare = null, bool descending = false)
+			: this(keySelector, compare, descending) {
+			foreach(T item in collection) Enqueue(item);
+		}
+		public PriorityQueue(Func<T, TSortKey> keySelector, IComparer<TSortKey> comparer, bool descending = false)
+			: this(keySelector, comparer.Compare, descending) { }
+		public PriorityQueue(Func<T, TSortKey> keySelector, IEnumerable<T> collection, IComparer<TSortKey> comparer, bool descending = false)
+			: this(keySelector, collection, comparer.Compare, descending) { }
+		private SortedSet<pqElement> set;
+		private struct pqElement {
+			public readonly int idx;
+			public readonly T item;
+			public pqElement(int idx, T item) {
+				this.idx = idx;
+				this.item = item;
+			}
+		}
+		private class PriorityQueueComparer : Comparer<pqElement> {
+			private readonly bool descending;
+			private readonly Func<T, TSortKey> getSortKey;
+			private readonly Func<TSortKey, TSortKey, int> compare;
+			public PriorityQueueComparer(bool descending, Func<T, TSortKey> keySelector, Func<TSortKey, TSortKey, int> compare) {
+				this.descending = descending;
+				getSortKey = keySelector;
+				this.compare = compare;
+			}
+			public override int Compare(pqElement x, pqElement y) {
+				int primarySort;
+				if(descending) primarySort = compare(getSortKey(y.item), getSortKey(x.item)); // Flip x & y for descending order.
+				else primarySort = compare(getSortKey(x.item), getSortKey(y.item));
+				if(primarySort != 0) return primarySort;
+				else return Comparer<int>.Default.Compare(x.idx, y.idx); // Use insertion order as the final tiebreaker.
+			}
+		}
+		public readonly bool DescendingOrder;
+		private static int nextIdx = 0;
+		public void Enqueue(T item) => set.Add(new pqElement(nextIdx++, item));
+		public T Dequeue() {
+			if(set.Count == 0) throw new InvalidOperationException("The PriorityQueue is empty.");
+			pqElement next = set.Min;
+			set.Remove(next);
+			return next.item;
+		}
+		public int Count => set.Count;
+		public void Clear() => set.Clear();
+		public bool Contains(T item) => set.Any(x => x.item.Equals(item));
+		public T Peek() {
+			if(set.Count == 0) throw new InvalidOperationException("The PriorityQueue is empty.");
+			return set.Min.item;
+		}
+		public bool ChangePriority(T item, Action<T> change) => ChangePriority(item, () => change(item));
+		//todo: xml, be sure to note that this preserves insertion order
+		public bool ChangePriority(T item, Action change) {
+			pqElement? found = null;
+			foreach(var element in set) { // Linear search is the best we can do, given our constraints.
+				if(element.item.Equals(item)) {
+					found = element;
+					break;
+				}
+			}
+			if(found == null) return false;
+			set.Remove(found.Value); // Remove the element before changing - otherwise, the set can't find it.
+			change();
+			set.Add(found.Value); // Add it again with its new priority.
+			return true;
+		}
+		public IEnumerator<T> GetEnumerator() {
+			foreach(var x in set) yield return x.item;
+		}
+		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+	}
 }

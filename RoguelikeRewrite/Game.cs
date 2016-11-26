@@ -1,12 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using Points;
-using Grids;
+using UtilityCollections;
 
 namespace RoguelikeRewrite {
 	public class Game {
-		public Queue Q;
-		private Grid<Tile> tiles;
+		//public PriorityQueue<GameEvent, int> Q;
+		/*private Grid<Tile> tiles;
 		private Grid<Actor> actors;
 		private Grid<Item> items;
 		private MultiGrid<Feature> features;
@@ -27,7 +27,7 @@ namespace RoguelikeRewrite {
 			public Game Game;
 			public GameObject(Game g) { Game = g; }
 
-			public Queue Q => Game.Q;
+			public GameEventQueue Q => Game.Q;
 			public ReadonlyGrid<Actor> Actors => Game.actors;
 			public ReadonlyGrid<Tile> Tiles => Game.tiles;
 			public ReadonlyGrid<Item> Items => Game.items;
@@ -35,6 +35,6 @@ namespace RoguelikeRewrite {
 
 			public Actor ActorAt(Positioned p) => Game.actors[p]; //keep the xAt methods? If so, add a (point) overload.
 			public Tile TileAt(Positioned p) => Game.Tiles[p];
-		}
+		}*/
 	}
 }

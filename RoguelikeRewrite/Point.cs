@@ -1,70 +1,91 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 
 namespace Points {
-	public interface Positioned {
-		point p { get; }
-	}
-
-	public struct point : IEquatable<point>{
+	public struct Point : IEquatable<Point> {
 		public readonly int x, y;
 
-		public point(int x, int y) { this.x = x;  this.y = y; }
-		public static point operator +(point left,point right) => new point(left.x + right.x, left.y + right.y);
-		public static point operator -(point left, point right) => new point(left.x - right.x, left.y - right.y);
-		public static point operator -(point right) => new point(-right.x, -right.y);
-		public static point operator +(point left, int i) => new point(left.x + i, left.y + i);
-		public static point operator -(point left, int i) => new point(left.x - i, left.y - i);
-		public static bool operator ==(point left, point right) => left.Equals(right);
-		public static bool operator !=(point left, point right) => !left.Equals(right);
+		public Point(int x, int y) { this.x = x;  this.y = y; }
+		public static Point operator +(Point left, Point right) => new Point(left.x + right.x, left.y + right.y);
+		public static Point operator -(Point left, Point right) => new Point(left.x - right.x, left.y - right.y);
+		public static Point operator -(Point right) => new Point(-right.x, -right.y);
+		public static Point operator +(Point left, int i) => new Point(left.x + i, left.y + i);
+		public static Point operator -(Point left, int i) => new Point(left.x - i, left.y - i);
+		public static bool operator ==(Point left, Point right) => left.Equals(right);
+		public static bool operator !=(Point left, Point right) => !left.Equals(right);
 		public override int GetHashCode() { unchecked { return x * 7757 + y; } }
 		public override bool Equals(object other) {
-			if(other is point) return Equals((point)other);
+			if(other is Point) return Equals((Point)other);
 			else return false;
 		}
-		public bool Equals(point other) => x == other.x && y == other.y;
-		public static readonly point Zero = new point(0, 0);
+		public bool Equals(Point other) => x == other.x && y == other.y;
+		public static readonly Point Zero = new Point(0, 0);
 	}
 
-	public interface Rectangular {
-		rectangle rect { get; }
-	}
+	public struct CellRectangle : IEquatable<CellRectangle> {
+		public readonly Point Position, Size;
+		public int x => Position.x;
+		public int y => Position.y;
+		public int Width => Size.x;
+		public int Height => Size.y;
+		public int Left => Position.x;
+		public int Right => Position.x + Size.x - 1;
+		public int Top => Position.y;
+		public int Bottom => Position.y + Size.y - 1;
+		public Point TopLeft => new Point(Left, Top);
+		public Point BottomLeft => new Point(Left, Bottom);
+		public Point TopRight => new Point(Right, Top);
+		public Point BottomRight => new Point(Right, Bottom);
+		public bool IsEmpty => Size.x <= 0 || Size.y <= 0;
 
-	public struct rectangle : IEquatable<rectangle>, IEnumerable<point>{
-		public readonly point position, size;
-		//todo: x, y, width, height? properties?
-		//
-		//todo: also check why i need this struct instead of using system's rectangle.
-
-		public rectangle(point position, point size) { this.position = position;  this.size = size; }
-		public rectangle(int x, int y, int width, int height) { position = new point(x, y); size = new point(width, height); }
-		IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
-		public IEnumerator<point> GetEnumerator() {
-			for(int i=position.x;i<position.x+size.x;++i) {
-				for(int j= position.y;j<position.y+size.y;++j) {
-					yield return new point(i,j);
+		public CellRectangle(Point position, Point size) { this.Position = position;  this.Size = size; }
+		public static CellRectangle CreateFromSize(int x, int y, int width, int height) => new CellRectangle(new Point(x, y), new Point(width, height));
+		public static CellRectangle CreateFromEdges(int left, int right, int top, int bottom) {
+			return new CellRectangle(new Point(left, top), new Point(right-left + 1, bottom-top + 1));
+		}
+		public static CellRectangle CreateFromPoints(Point p1, Point p2) {
+			int resultLeft = Math.Min(p1.x, p2.x);
+			int resultRight = Math.Max(p1.x, p2.x);
+			int resultTop = Math.Min(p1.y, p2.y);
+			int resultBottom = Math.Max(p1.y, p2.y);
+			return CreateFromEdges(resultLeft, resultRight, resultTop, resultBottom);
+		}
+		public IEnumerable<Point> Points {
+			get {
+				for(int i=Position.x; i<Position.x+Size.x; ++i) {
+					for(int j=Position.y; j<Position.y+Size.y; ++j) {
+						yield return new Point(i, j);
+					}
 				}
 			}
 		}
-		public bool Contains(point p) => p.x >= position.x && p.x < position.x+size.x && p.y >= position.y && p.y < position.y+size.y;
-		public bool Contains(rectangle other) {
-			return position.x <= other.position.x && position.x + size.x >= other.position.x + other.size.x
-				&& position.y <= other.position.y && position.y + size.y >= other.position.y + other.size.y;
+		public CellRectangle Shrink(int i) => new CellRectangle(Position + i, Size - i*2); // todo: Is there any need for shrink/grow taking 2 ints apiece?
+		public CellRectangle Grow(int i) => new CellRectangle(Position - i, Size + i*2); // todo: or what about shrink/grow toward corner?
+		public CellRectangle Translate(Point p) => new CellRectangle(Position + p, Size); // todo: what about 90(+) degree rotation around a point?
+		public bool Contains(Point p) => p.x >= Position.x && p.x < Position.x+Size.x && p.y >= Position.y && p.y < Position.y+Size.y;
+		public bool Contains(CellRectangle other) {
+			return Position.x <= other.Position.x && Position.x + Size.x >= other.Position.x + other.Size.x
+				&& Position.y <= other.Position.y && Position.y + Size.y >= other.Position.y + other.Size.y;
 		}
-		public rectangle Shrink(int i) => new rectangle(position + i, size - i);
-		public rectangle Grow(int i) => new rectangle(position - i, size + i);
-		public override int GetHashCode() { unchecked { return position.GetHashCode() + size.GetHashCode() * 5003; } }
+		public bool Intersects(CellRectangle other) {
+			if(this.Left > other.Right || other.Left > this.Right) return false;
+			if(this.Top > other.Bottom || other.Top > this.Bottom) return false;
+			return true;
+		}
+		public CellRectangle GetIntersection(CellRectangle other) {
+			int resultLeft = Math.Max(this.Left, other.Left);
+			int resultTop = Math.Max(this.Top, other.Top);
+			int resultRight = Math.Min(this.Right, other.Right);
+			int resultBottom = Math.Min(this.Bottom, other.Bottom);
+			return CreateFromEdges(resultLeft, resultRight, resultTop, resultBottom);
+		}
+		public override int GetHashCode() { unchecked { return Position.GetHashCode() + Size.GetHashCode() * 5003; } }
 		public override bool Equals(object other) {
-			if(other is rectangle) return Equals((rectangle)other);
+			if(other is CellRectangle) return Equals((CellRectangle)other);
 			else return false;
 		}
-		public bool Equals(rectangle other) => position.Equals(other.position) && size.Equals(other.size);
-		public static bool operator ==(rectangle left, rectangle right) => left.Equals(right);
-		public static bool operator !=(rectangle left, rectangle right) => !left.Equals(right);
-		//if needed, add Contains(rectangle), and Shrink(pos) & Grow(pos) which can shrink X and Y by different amounts.
-		// also Move(point)
-		//what about overlaps? returns bool or rectangle?
-		// width/height properties? or fields?
+		public bool Equals(CellRectangle other) => Position.Equals(other.Position) && Size.Equals(other.Size);
+		public static bool operator ==(CellRectangle left, CellRectangle right) => left.Equals(right);
+		public static bool operator !=(CellRectangle left, CellRectangle right) => !left.Equals(right);
 	}
 }

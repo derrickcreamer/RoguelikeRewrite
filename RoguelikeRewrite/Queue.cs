@@ -1,20 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
+using UtilityCollections;
 
 namespace RoguelikeRewrite {
-	public class Queue {
-		static bool suspend;
-		public GameEvent Next => null;
+	public class GameEvent {
+		public int executionTime;
+		public void Execute() { }
+	}
+	public class GameEventQueue {
+		private PriorityQueue<GameEvent, int> pq = new PriorityQueue<GameEvent, int>(e => e.executionTime);
+		public static bool Suspend = false;
+		//public GameEvent Next => null;
+		public GameEvent CurrentEvent = null;
 		public void Run() {
-			while(!suspend) {
-				/*current_event = list.First.Value;
-				turn = current_event.TimeToExecute();
-				cached_status = null;
-				cached_lighting = null;
-				current_event.Execute();
-				list.Remove(current_event);*/
-				//
-				//remove dead stuff here?
+			Suspend = false;
+			while(!Suspend) {
+				CurrentEvent = pq.Peek();
+				int turn; //todo
+				turn = CurrentEvent.executionTime;
+				//todo: null cached status, cached lighting?
+				CurrentEvent.Execute();
+				pq.Dequeue();
+				//todo: cleanup here. remove dead stuff, etc.
 			}
 		}
 	}

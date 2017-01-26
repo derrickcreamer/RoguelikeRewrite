@@ -3,11 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace UtilityCollections { // Updated 2016-12-05
+namespace UtilityCollections { // Updated 2017-01-21
 	/// <summary>
 	/// A hashset with an indexer for convenience.
 	/// </summary>
-	public class DefaultHashSet<T> : HashSet<T> {
+	public class EasyHashSet<T> : HashSet<T> {
 		/// <summary>
 		/// GET: Returns true if the given element is present.
 		/// SET: If 'true', add the given element. If 'false', remove the given element.
@@ -19,9 +19,9 @@ namespace UtilityCollections { // Updated 2016-12-05
 				else Remove(t);
 			}
 		}
-		public DefaultHashSet() { }
-		public DefaultHashSet(IEqualityComparer<T> comparer) : base(comparer) { }
-		public DefaultHashSet(IEnumerable<T> collection, IEqualityComparer<T> comparer = null) : base(collection, comparer) { }
+		public EasyHashSet() { }
+		public EasyHashSet(IEqualityComparer<T> comparer) : base(comparer) { }
+		public EasyHashSet(IEnumerable<T> collection, IEqualityComparer<T> comparer = null) : base(collection, comparer) { }
 	}
 	/// <summary>
 	/// A dictionary that returns a default value if the given key isn't present.
@@ -443,6 +443,7 @@ namespace UtilityCollections { // Updated 2016-12-05
 			d2.Clear();
 		}
 	}
+	//todo, xml note about how this is a stable sort (right?)
 	public class PriorityQueue<T, TSortKey> : IEnumerable<T>, IReadOnlyCollection<T> {
 		public PriorityQueue(Func<T, TSortKey> keySelector, bool descending = false)
 			: this(keySelector, Comparer<TSortKey>.Default.Compare, descending) { }

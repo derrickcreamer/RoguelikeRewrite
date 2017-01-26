@@ -13,7 +13,7 @@ namespace Grids {
 		protected Func<T> getDefault;
 		protected Func<TPosition, bool> isInBounds;
 		public Grid() : this(null) { }
-		public Grid(Func<TPosition, bool> isInBounds) {
+		public Grid(Func<TPosition, bool> isInBounds) { //todo: add a constructor that takes a rectangle, or at least a helper method.
 			map = new BimapOneToOne<T, TPosition>();
 			if(isInBounds == null) isInBounds = x => true;
 			this.isInBounds = isInBounds;

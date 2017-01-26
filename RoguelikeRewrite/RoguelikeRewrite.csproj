@@ -56,6 +56,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Creature.cs" />
     <Compile Include="GameAction.cs" />
     <Compile Include="GameAction2.cs" />
     <Compile Include="GameAction3.cs" />

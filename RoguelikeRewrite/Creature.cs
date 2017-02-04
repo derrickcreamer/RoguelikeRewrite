@@ -222,68 +222,172 @@ namespace nextTry {
 namespace anotherTry {
 	using System.Collections.Generic;
 	using testClasses;
+	using UtilityCollections;
+	using WalkArgs = WalkAction.Args;
+	using WalkCondition = WalkAction.CancelCondition;
 
 	public class ActionResult {
 		public virtual bool Canceled { get; set; }
 		public virtual string Message { get; set; }
 		public virtual int Cost { get; set; }
 	}
-	public interface ICancelDecider<TCancelReason, TArgs> {
-		bool IsDeterministic(TCancelReason reason, TArgs args);
-		bool ConfirmCancel(TCancelReason reason, TArgs args);
+	public interface ICancelDecider<TCancelCondition, TArgs> {
+		bool IsDeterministic(TCancelCondition reason, TArgs args);
+		bool ConfirmCancel(TCancelCondition reason, TArgs args);
 	}
-	public class X : ICancelDecider<WalkAction.CancelReason, WalkAction.Args>,
-		ICancelDecider<int, PushWhileWalkingAction.Args> {
-
-		Dictionary<WalkAction.CancelReason, Func<WalkAction.Args, bool>> walkPrompts;
-		Dictionary<int, Func<PushWhileWalkingAction.Args, bool>> pushWalkPrompts;
-		void init() {
-			walkPrompts[WalkAction.CancelReason.BlockedByCreature] = args => {
-				args.target = UI.ChooseTarget(args.creature);
-				return args.target == null;
-			};
+	//todo, xml stuff for this one
+	// So, it's like this:
+	// First, we have the automatic responses of the given default. These responses are a deterministic "yes, cancel" or
+	//  "no, don't cancel", depending on the given default.
+	// Second, we have the automatic responses that are exceptions to the given default. These are still automatic & deterministic
+	//  responses - they're just the opposite answer from the default.
+	// Third, we have fully deterministic or fully nondeterministic decisions based on args.
+	//  An example of the former: "cancel throwing if success chance is under 5%. Otherwise, do not cancel."
+	//  An example of the latter: "ask player 'really do that?'"
+	// Fourth, we have decisions based on args that might be deterministic, or not, also based on the args.
+	//  For example: "cancel automatically if success chance is under 5%. Otherwise, ask 'really do that with an X% chance of success?'"
+	//
+	public class CancelDecider<TCancelCondition, TArgs> : ICancelDecider<TCancelCondition, TArgs> {
+		public virtual bool IsDeterministic(TCancelCondition condition, TArgs args) {
+			// No confirm function? Then it's either an automatic yes or no, and therefore deterministic:
+			if(!confirmCancelFuncs.ContainsKey(condition)) return true;
+			// If a d. function exists, use it:
+			if(isDeterministicFuncs.TryGetValue(condition, out Func<TArgs, bool> isD)) return isD(args);
+			// Otherwise, if it's deterministic, it was added to the hashset:
+			return confirmCancelIsDeterministic.Contains(condition);
 		}
-		// hmm...possible options...
-		// well, i can't share any (args) => (bool) functions unless the args are the same type.
-		// I could try inheritance, but that would probably fall apart with complex matches.
-		// I could try interfaces for the args, but the UI hooks are the ones that care what type it is.
-		// anyway, i guess the place to start is to figure out WHERE these hooks would be created.
-		//	-would they be on the same object or not?
-		//
-		// just what data does ChooseTarget need, anyway?
-
-		public bool ConfirmCancel(int reason, PushWhileWalkingAction.Args args) {
-			throw new NotImplementedException();
+		public virtual bool ConfirmCancel(TCancelCondition condition, TArgs args) {
+			// If a confirm function exists, use it:
+			if(confirmCancelFuncs.TryGetValue(condition, out Func<TArgs, bool> confirm)) return confirm(args);
+			// Otherwise, it's either the default response, or the opposite of the default:
+			if(exceptionsToDefault.Contains(condition)) return !defaultResponse;
+			else return defaultResponse;
 		}
-
-		public bool ConfirmCancel(WalkAction.CancelReason reason, WalkAction.Args args) {
-			throw new NotImplementedException();
+		protected bool defaultResponse = true;
+		protected HashSet<TCancelCondition> exceptionsToDefault;
+		protected Dictionary<TCancelCondition, Func<TArgs, bool>> confirmCancelFuncs = new Dictionary<TCancelCondition, Func<TArgs, bool>>();
+		protected Dictionary<TCancelCondition, Func<TArgs, bool>> isDeterministicFuncs = new Dictionary<TCancelCondition, Func<TArgs, bool>>();
+		protected HashSet<TCancelCondition> confirmCancelIsDeterministic = new HashSet<TCancelCondition>();
+		//todo, xml for all this:
+		public CancelDecider(bool defaultResponse = true, params TCancelCondition[] exceptionsToDefaultResponse) {
+			this.defaultResponse = defaultResponse;
+			exceptionsToDefault = new HashSet<TCancelCondition>(exceptionsToDefaultResponse);
 		}
-
-		public bool IsDeterministic(int reason, PushWhileWalkingAction.Args args) {
-			throw new NotImplementedException();
+		public virtual CancelDecider<TCancelCondition, TArgs> RegisterDeterministic(
+			TCancelCondition condition,
+			Func<TArgs, bool> confirmCancel)
+		{
+			confirmCancelFuncs[condition] = confirmCancel;
+			confirmCancelIsDeterministic.Add(condition);
+			return this;
 		}
-
-		public bool IsDeterministic(WalkAction.CancelReason reason, WalkAction.Args args) {
-			throw new NotImplementedException();
+		public virtual CancelDecider<TCancelCondition, TArgs> RegisterNondeterministic(
+			TCancelCondition condition,
+			Func<TArgs, bool> confirmCancel)
+		{
+			confirmCancelFuncs[condition] = confirmCancel;
+			return this;
 		}
+		public virtual CancelDecider<TCancelCondition, TArgs> RegisterDeterministic(
+			IDictionary<TCancelCondition, Func<TArgs, bool>> confirmCancelDict)
+		{
+			foreach(var pair in confirmCancelDict) {
+				confirmCancelFuncs[pair.Key] = pair.Value;
+				confirmCancelIsDeterministic.Add(pair.Key);
+			}
+			return this;
+		}
+		public virtual CancelDecider<TCancelCondition, TArgs> RegisterNondeterministic(
+			IDictionary<TCancelCondition, Func<TArgs, bool>> confirmCancelDict)
+		{
+			foreach(var pair in confirmCancelDict) {
+				confirmCancelFuncs[pair.Key] = pair.Value;
+			}
+			return this;
+		}
+		public virtual CancelDecider<TCancelCondition, TArgs> Register(
+			TCancelCondition condition,
+			Func<TArgs, bool> confirmCancel,
+			Func<TArgs, bool> isDeterministic)
+		{
+			confirmCancelFuncs[condition] = confirmCancel;
+			isDeterministicFuncs[condition] = isDeterministic;
+			return this;
+		}
+		public virtual CancelDecider<TCancelCondition, TArgs> RegisterMultipleDeterministic(
+			Func<TArgs, bool> confirmCancel,
+			params TCancelCondition[] conditions)
+		{
+			foreach(var condition in conditions) {
+				confirmCancelFuncs[condition] = confirmCancel;
+				confirmCancelIsDeterministic.Add(condition);
+			}
+			return this;
+		}
+		public virtual CancelDecider<TCancelCondition, TArgs> RegisterMultipleNondeterministic(
+			Func<TArgs, bool> confirmCancel,
+			params TCancelCondition[] conditions)
+		{
+			foreach(var condition in conditions) {
+				confirmCancelFuncs[condition] = confirmCancel;
+			}
+			return this;
+		}
+		public virtual CancelDecider<TCancelCondition, TArgs> RegisterMultiple(
+			Func<TArgs, bool> confirmCancel,
+			Func<TArgs, bool> isDeterministic,
+			params TCancelCondition[] conditions)
+		{
+			foreach(var condition in conditions) {
+				confirmCancelFuncs[condition] = confirmCancel;
+				isDeterministicFuncs[condition] = isDeterministic;
+			}
+			return this;
+		}
+	}
+	public class foo<TCancelCondition, TArgs> : CancelDecider<TCancelCondition, TArgs> {
+		public override bool ConfirmCancel(TCancelCondition condition, TArgs args) {
+			if(confirmCancelFuncs.TryGetValue(condition, out Func<TArgs, bool> confirm)) return confirm(args);
+			var targetArgs = args as ITargetingArgs;
+			if(targetArgs != null) {
+				string conditionName = Enum.GetName(typeof(TCancelCondition), condition);
+				if(conditionName == "TargetMissing") {
+					return UI.ChooseNewTarget(targetArgs, "hmm");
+				}
+			}
+			//todo: and then probably override IsDeterministic too, to return the correct value for UI.ChooseNewTarget.
+			return base.ConfirmCancel(condition, args);
+			//todo: however, this is not a complete solution. THIS class is still only a single decider.
+			//  How would I create a larger 'shared' version?
+		}
+	}
+	public interface ITargetingArgs {
+		Point destination{ get; set; }
+	}
+	public static class UI { // (this is just an example class, delete it)
+		public static Point GetTarget(ITargetingArgs args, string s) => new Point();
+		public static bool ChooseNewTarget(ITargetingArgs args, string s) {
+			args.destination = GetTarget(args, s);
+			return args.destination.Equals(null);
+		}
+		public static bool YesOrNoPrompt(string s) => true;
 	}
 	/*public class Decider<TCancelReason, TArgs> { //todo, "CancelDecider"?
 		public bool ConfirmCancel(TCancelReason reason, TArgs args) => false;
 		public bool IsDeterministic(TCancelReason reason, TArgs args) => false;
 		//should the constructor take a bool for whether it defaults to yes or no, when nothing has been provided for a certain reason?
 	}*/
-	public class CancelOverrides<TCancelReason> {
+	public class CancelOverrides<TCancelCondition> {
 		public bool NoCancel { get; protected set; }
-		public bool? ResultFor(TCancelReason reason) {
+		public bool? ResultFor(TCancelCondition reason) {
 			if(results.TryGetValue(reason, out bool result)) return result;
 			else return null;
 		}
 
-		protected Dictionary<TCancelReason, bool> results = new Dictionary<TCancelReason, bool>();
+		protected Dictionary<TCancelCondition, bool> results = new Dictionary<TCancelCondition, bool>();
 		public CancelOverrides(bool noCancel) => NoCancel = noCancel;
 		//todo, xml: explain that setting values here is how you override the choice of the ICancelDecider.
-		public bool? this[TCancelReason reason] {
+		public bool? this[TCancelCondition reason] {
 			get => ResultFor(reason);
 			set {
 				if(value == null) results.Remove(reason);
@@ -291,22 +395,22 @@ namespace anotherTry {
 			}
 		}
 	}
-	public class ConditionLookup<TCancelReason, TArgs> {
-		protected Dictionary<TCancelReason, Func<TArgs, bool>> d;
-		public bool Check(TCancelReason reason, TArgs args) => d[reason](args);
-		public Func<TArgs, bool> this[TCancelReason reason] {
+	public class ConditionLookup<TCancelCondition, TArgs> {
+		protected Dictionary<TCancelCondition, Func<TArgs, bool>> d;
+		public bool Check(TCancelCondition reason, TArgs args) => d[reason](args);
+		public Func<TArgs, bool> this[TCancelCondition reason] {
 			get => d[reason];
 			set => d[reason] = value;
 		}
 	}
 	public static class GameAction {
 		//todo, xml
-		public static HashSet<TCancelReason> CheckAllConditions<TCancelReason, TArgs>(
-			ConditionLookup<TCancelReason, TArgs> conditions,
+		public static HashSet<TCancelCondition> CheckAllConditions<TCancelCondition, TArgs>(
+			ConditionLookup<TCancelCondition, TArgs> conditions,
 			TArgs args)
 		{
-			var trueConditions = new HashSet<TCancelReason>();
-			foreach(TCancelReason reason in Enum.GetValues(typeof(TCancelReason))) {
+			var trueConditions = new HashSet<TCancelCondition>();
+			foreach(TCancelCondition reason in Enum.GetValues(typeof(TCancelCondition))) {
 				if(conditions.Check(reason, args)) {
 					trueConditions.Add(reason);
 				}
@@ -315,16 +419,16 @@ namespace anotherTry {
 		}
 		//todo, xml note that overrides can be null.
 		//todo, could the decider be null too? Maybe that should mean 'never cancel'.
-		public static bool ConfirmCancel<TCancelReason, TArgs>(
-			IEnumerable<TCancelReason> trueReasons,
+		public static bool ConfirmCancel<TCancelCondition, TArgs>(
+			IEnumerable<TCancelCondition> trueReasons,
 			TArgs args,
-			ICancelDecider<TCancelReason, TArgs> decider,
-			CancelOverrides<TCancelReason> overrides)
+			ICancelDecider<TCancelCondition, TArgs> decider,
+			CancelOverrides<TCancelCondition> overrides)
 		{
 			//TODO, fix this so it works with null 'overrides'
 			if(overrides.NoCancel) return false;
 			// First, check for explicitly overridden 'true' values or deterministic results:
-			foreach(TCancelReason reason in trueReasons) {
+			foreach(TCancelCondition reason in trueReasons) {
 				switch(overrides.ResultFor(reason)) {
 					case true:
 						return true;
@@ -336,35 +440,35 @@ namespace anotherTry {
 				}
 			}
 			// Then, if no result has been found, move to the nondeterministic confirmations (including the *actual* prompts to the player):
-			foreach(TCancelReason reason in trueReasons) {
+			foreach(TCancelCondition reason in trueReasons) {
 				if(overrides.ResultFor(reason) == null && decider.ConfirmCancel(reason, args)) return true;
 			}
 			return false;
 		}
 	}
 	public static class WalkAction {
-		public class Args {
+		public class Args : ITargetingArgs {
 			public Creature creature;
-			public Point destination;
+			public Point destination { get; set; }
 		}
 
 		// todo: these might indeed become 'predictable conditions'
-		public enum CancelReason { BlockedByTerrain, BlockedByCreature, TargetMissing };
+		public enum CancelCondition { BlockedByTerrain, BlockedByCreature, TargetMissing };
 
 		public enum RNGConditions { Slipped };
 
-		public static ConditionLookup<CancelReason, Args> Conditions = new ConditionLookup<CancelReason, Args> {
-			[CancelReason.BlockedByCreature] = args => {
+		public static ConditionLookup<CancelCondition, Args> Conditions = new ConditionLookup<CancelCondition, Args> {
+			[CancelCondition.BlockedByCreature] = args => {
 				if(true) return false;
 				return true; // pretend this is actually the code that checks whether this move is blocked.
 							 //return args.creature.Game.Creatures[args.destination] != null; // (or whatever)
 			},
-			[CancelReason.BlockedByTerrain] = args => true,
+			[CancelCondition.BlockedByTerrain] = args => true,
 			//return args.creature.CanPass(args.destination); // (or whatever)
 
 			// This one could be used for a ranged action requiring a distant target:
 			// (and this would be paired with a targeting prompt on the Decider)
-			[CancelReason.TargetMissing] = args => args.creature == null
+			[CancelCondition.TargetMissing] = args => args.creature == null
 		};
 
 		public static ConditionLookup<RNGConditions, Args> RandomConditions = new ConditionLookup<RNGConditions, Args> {
@@ -373,18 +477,22 @@ namespace anotherTry {
 				return true;
 			}
 		};
-		public static ActionResult Perform(Args args, ICancelDecider<CancelReason, Args> decider, CancelOverrides<CancelReason> overrides = null) {
+		public static ActionResult Perform(Args args, ICancelDecider<CancelCondition, Args> decider, CancelOverrides<CancelCondition> overrides = null) {
 			var trueConditions = GameAction.CheckAllConditions(Conditions, args);
 			if(GameAction.ConfirmCancel(trueConditions, args, decider, overrides)) return new ActionResult(){ Canceled = true };
 			//...now perform the actual action.
-			decider.ConfirmCancel(CancelReason.TargetMissing, args); // <-- awesome
+			decider.ConfirmCancel(CancelCondition.TargetMissing, args); // <-- awesome
 			return null;
 		}
 	}
+	public abstract class PushAction {
+		public class Args{ }
+		public enum CancelCondition{ TargetMissing };
+	}
 	public abstract class PushWhileWalkingAction {
-		public class Args {
+		public class Args : ITargetingArgs {
 			public Creature creature;
-			public Point destination;
+			public Point destination {get;set; }
 			//todo: this COULD include WalkAction.Args too! It might or might not only be used for its overrides.
 		}
 		//public enum CancelReason { BlockedByTerrain, BlockedByCreature, PushBlocked };
@@ -411,9 +519,9 @@ namespace anotherTry {
 		}*/
 		public static ActionResult Perform(
 			Args args,
-			ICancelDecider<WalkAction.CancelReason, WalkAction.Args> walkDecider,
+			ICancelDecider<WalkAction.CancelCondition, WalkAction.Args> walkDecider,
 			ICancelDecider<PushAction.CancelReason, PushAction.Args> pushDecider,
-			CancelOverrides<WalkAction.CancelReason> walkOverrides,
+			CancelOverrides<WalkAction.CancelCondition> walkOverrides,
 			CancelOverrides<PushAction.CancelReason> pushOverrides) {
 			var trueWalkConditions = CheckAllConditions(WalkAction.Conditions, null);
 			var truePushConditions = CheckAllConditions(PushAction.Conditions, null);

@@ -3,7 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace UtilityCollections { // Updated 2017-01-21
+namespace UtilityCollections { // Updated 2017-05-27
+	using CircularLinkedListExtensions;
 	/// <summary>
 	/// A hashset with an indexer for convenience.
 	/// </summary>
@@ -443,13 +444,18 @@ namespace UtilityCollections { // Updated 2017-01-21
 			d2.Clear();
 		}
 	}
-	//todo, xml note about how this is a stable sort (right?)
+	/// <summary>
+	/// A priority queue with stable sorting (i.e. preservation of insertion order)
+	/// </summary>
+	/// <typeparam name="T">The type of element in this priority queue</typeparam>
+	/// <typeparam name="TSortKey">The type of the sort key that will be used to order the elements</typeparam>
 	public class PriorityQueue<T, TSortKey> : IEnumerable<T>, IReadOnlyCollection<T> {
 		public PriorityQueue(Func<T, TSortKey> keySelector, bool descending = false)
 			: this(keySelector, Comparer<TSortKey>.Default.Compare, descending) { }
 		public PriorityQueue(Func<T, TSortKey> keySelector, Func<TSortKey, TSortKey, int> compare, bool descending = false) {
+			if(keySelector == null) throw new ArgumentNullException(nameof(keySelector));
 			if(compare == null) compare = Comparer<TSortKey>.Default.Compare;
-			set = new SortedSet<pqElement>(new PriorityQueueComparer(descending, keySelector, compare));
+			set = new SortedSet<PQElement>(new PriorityQueueComparer(descending, keySelector, compare));
 			DescendingOrder = descending;
 		}
 		public PriorityQueue(Func<T, TSortKey> keySelector, IEnumerable<T> collection, Func<TSortKey, TSortKey, int> compare = null, bool descending = false)
@@ -460,16 +466,16 @@ namespace UtilityCollections { // Updated 2017-01-21
 			: this(keySelector, comparer.Compare, descending) { }
 		public PriorityQueue(Func<T, TSortKey> keySelector, IEnumerable<T> collection, IComparer<TSortKey> comparer, bool descending = false)
 			: this(keySelector, collection, comparer.Compare, descending) { }
-		private SortedSet<pqElement> set;
-		private struct pqElement {
+		private SortedSet<PQElement> set;
+		private struct PQElement {
 			public readonly int idx;
 			public readonly T item;
-			public pqElement(int idx, T item) {
+			public PQElement(int idx, T item) {
 				this.idx = idx;
 				this.item = item;
 			}
 		}
-		private class PriorityQueueComparer : Comparer<pqElement> {
+		private class PriorityQueueComparer : Comparer<PQElement> {
 			private readonly bool descending;
 			private readonly Func<T, TSortKey> getSortKey;
 			private readonly Func<TSortKey, TSortKey, int> compare;
@@ -478,7 +484,7 @@ namespace UtilityCollections { // Updated 2017-01-21
 				getSortKey = keySelector;
 				this.compare = compare;
 			}
-			public override int Compare(pqElement x, pqElement y) {
+			public override int Compare(PQElement x, PQElement y) {
 				int primarySort;
 				if(descending) primarySort = compare(getSortKey(y.item), getSortKey(x.item)); // Flip x & y for descending order.
 				else primarySort = compare(getSortKey(x.item), getSortKey(y.item));
@@ -486,12 +492,12 @@ namespace UtilityCollections { // Updated 2017-01-21
 				else return Comparer<int>.Default.Compare(x.idx, y.idx); // Use insertion order as the final tiebreaker.
 			}
 		}
-		public readonly bool DescendingOrder;
+		public bool DescendingOrder { get; protected set; }
 		private static int nextIdx = 0;
-		public void Enqueue(T item) => set.Add(new pqElement(nextIdx++, item));
+		public void Enqueue(T item) => set.Add(new PQElement(nextIdx++, item));
 		public T Dequeue() {
 			if(set.Count == 0) throw new InvalidOperationException("The PriorityQueue is empty.");
-			pqElement next = set.Min;
+			PQElement next = set.Min;
 			set.Remove(next);
 			return next.item;
 		}
@@ -502,10 +508,15 @@ namespace UtilityCollections { // Updated 2017-01-21
 			if(set.Count == 0) throw new InvalidOperationException("The PriorityQueue is empty.");
 			return set.Min.item;
 		}
+		/// <summary>
+		/// Change the priority of an element (without changing its insertion order). Returns false if not found. This is an O(n) operation.
+		/// </summary>
 		public bool ChangePriority(T item, Action<T> change) => ChangePriority(item, () => change(item));
-		//todo: xml, be sure to note that this preserves insertion order
+		/// <summary>
+		/// Change the priority of an element (without changing its insertion order). Returns false if not found. This is an O(n) operation.
+		/// </summary>
 		public bool ChangePriority(T item, Action change) {
-			pqElement? found = null;
+			PQElement? found = null;
 			foreach(var element in set) { // Linear search is the best we can do, given our constraints.
 				if(element.item.Equals(item)) {
 					found = element;
@@ -522,6 +533,187 @@ namespace UtilityCollections { // Updated 2017-01-21
 			foreach(var x in set) yield return x.item;
 		}
 		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+	}
+
+	/// <summary>
+	/// Maintains a totally ordered set, offering constant time comparison of the relative order of its elements.
+	/// </summary>
+	public class OrderingCollection<T> {
+		// Based on "Two Algorithms for Maintaining Order in a List", Sleator and Dietz, 1988
+		private class OrderingNode {
+			public T Element;
+			public ulong Label;
+			public OrderingNode(T element, ulong label) {
+				Element = element;
+				Label = label;
+			}
+		}
+
+		private LinkedListNode<OrderingNode> BaseRecord;
+
+		private LinkedList<OrderingNode> list;
+
+		private DefaultValueDictionary<T, LinkedListNode<OrderingNode>> dict;
+
+		public OrderingCollection() : this(null) { }
+		public OrderingCollection(IEqualityComparer<T> comparer) {
+			list = new LinkedList<OrderingNode>();
+			BaseRecord = new LinkedListNode<OrderingNode>(new OrderingNode(default(T), 0UL));
+			list.AddFirst(BaseRecord);
+			dict = new DefaultValueDictionary<T, LinkedListNode<OrderingNode>>(comparer);
+		}
+
+		public bool Contains(T element) => dict.ContainsKey(element);
+
+		public int Compare(T first, T second) {
+			var firstNode = dict[first];
+			var secondNode = dict[second];
+			if(firstNode == null) throw new KeyNotFoundException("Element 'first' not present in collection.");
+			if(secondNode == null) throw new KeyNotFoundException("Element 'second' not present in collection.");
+			return LabelRelativeToBase(firstNode).CompareTo(LabelRelativeToBase(secondNode));
+		}
+
+		public int Count => dict.Count;
+
+		public bool Remove(T element) {
+			var node = dict[element];
+			if(node == null) return false;
+			list.Remove(node);
+			dict.Remove(element);
+			return true;
+		}
+
+		/// <summary>
+		/// Inserts a new element before (with a lower value than) all other elements in the ordering.
+		/// </summary>
+		public void InsertAtStart(T newElement) => InsertAfter(BaseRecord, newElement);
+
+		/// <summary>
+		/// Inserts a new element after (with a higher value than) all other elements in the ordering.
+		/// </summary>
+		public void InsertAtEnd(T newElement) => InsertAfter(list.Last, newElement);
+
+		/// <summary>
+		/// Insert a new element directly before an existing element. (If beforeElement is null, the new element is inserted at the end.)
+		/// </summary>
+		/// <param name="beforeElement">The existing element already in the collection</param>
+		public void InsertBefore(T beforeElement, T newElement) {
+			if(beforeElement == null) {
+				InsertAfter(list.Last, newElement);
+			}
+			else {
+				var node = dict[beforeElement];
+				if(node == null) throw new KeyNotFoundException("Can't insert before an element that isn't in the collection.");
+				InsertAfter(node.Previous, newElement);
+			}
+		}
+
+		/// <summary>
+		/// Insert a new element directly after an existing element. (If afterElement is null, the new element is inserted at the start.)
+		/// </summary>
+		/// <param name="afterElement">The existing element already in the collection</param>
+		public void InsertAfter(T afterElement, T newElement) {
+			if(afterElement == null) {
+				InsertAfter(BaseRecord, newElement);
+			}
+			else {
+				var node = dict[afterElement];
+				if(node == null) throw new KeyNotFoundException("Can't insert after an element that isn't in the collection.");
+				InsertAfter(node, newElement);
+			}
+		}
+
+		private ulong LabelRelativeToBase(LinkedListNode<OrderingNode> record) {
+			unchecked { return record.Value.Label - BaseRecord.Value.Label; }
+		}
+
+		private ulong? NextLabelRelativeToBase(LinkedListNode<OrderingNode> record) {
+			var next = record.GetNextCircular();
+			if(next == BaseRecord) return null; // return M
+			else return LabelRelativeToBase(next);
+		}
+
+		/// <summary>
+		/// Returns w_i for values of i greater than zero. If start and finish are the same, returns null (for M) rather than zero.
+		/// </summary>
+		private ulong? LabelDistance(LinkedListNode<OrderingNode> start, LinkedListNode<OrderingNode> finish) {
+			if(start == finish) return null; // return M
+
+			unchecked {
+				return finish.Value.Label - start.Value.Label;
+			}
+		}
+
+		// Here we want to find the ulong closest to x * (MAX_ULONG + 1) for a double x (0.0 - 1.0).
+		// So we'll do x*MAX_ULONG + x.
+		//ulong GetPortionOfM(double x) => (ulong)(x*ulong.MaxValue + x);
+
+		private ulong GetFractionOfM(ulong n, ulong d) {
+			double x = (double)n / (double)d;
+			return (ulong)(x*(double)ulong.MaxValue + x);
+		}
+
+		// Max for decimal is (ballpark) around 10 million times higher than max for ulong.
+		// Therefore, overflow could occur if n exceeds 10 million.
+		private ulong GetFraction(ulong x, ulong n, ulong d) {
+			decimal decX = x, decN = n, decD = d;
+			return (ulong)(decX * decN / decD); // n is expected to be fairly small here.
+		}
+
+		private void InsertAfter(LinkedListNode<OrderingNode> afterNode, T newElement) {
+			if(newElement == null) throw new ArgumentNullException("newElement", "Collection does not support null entries.");
+			if(dict.ContainsKey(newElement)) throw new InvalidOperationException("Element is already present in collection.");
+			// Find the starting point for our possible relabeling.
+
+			ulong j = 1UL;
+			LinkedListNode<OrderingNode> current = afterNode.GetNextCircular();
+
+			while(LabelDistance(afterNode, current) != null && LabelDistance(afterNode, current).Value <= j * j) {
+				++j;
+				current = current.GetNextCircular();
+			}
+
+			ulong? finalLabel = LabelDistance(afterNode, current);
+
+			// Now, relabel (j-1) records:
+			current = afterNode.GetNextCircular();
+			for(ulong k = 1UL;k<j;++k) {
+				ulong relabel;
+				if(finalLabel == null) {
+					unchecked {
+						relabel = GetFractionOfM(k, j) + afterNode.Value.Label;
+					}
+				}
+				else {
+					unchecked {
+						relabel = GetFraction(finalLabel.Value, k, j) + afterNode.Value.Label;
+					}
+				}
+				current.Value.Label = relabel;
+				current = current.GetNextCircular();
+			}
+
+			// Insert the new element:
+			const ulong halfM = 1UL << 63; // 2^63, half of 2^64
+
+			ulong newLabelRelativeToBase;
+			if(NextLabelRelativeToBase(afterNode) == null) {
+				// Averaging with M, so use halfM:
+				newLabelRelativeToBase = (LabelRelativeToBase(afterNode)/2UL) + halfM;
+			}
+			else {
+				// Carefully avoid off-by-one errors here...
+				newLabelRelativeToBase = (NextLabelRelativeToBase(afterNode).Value - LabelRelativeToBase(afterNode))/2UL
+					+ LabelRelativeToBase(afterNode);
+			}
+			ulong newLabel;
+			unchecked {
+				newLabel = newLabelRelativeToBase + BaseRecord.Value.Label;
+			}
+			var newNode = new LinkedListNode<OrderingNode>(new OrderingNode(newElement, newLabel));
+			list.AddAfter(afterNode, newNode);
+			dict[newElement] = newNode;
+		}
 	}
 }
 
@@ -552,5 +744,16 @@ namespace UtilityCollectionsExtensions {
 		public static bool RemoveT2<T1, T2>(this BimapManyToMany<T1, T2> bimap, T2 obj) => bimap.Remove(obj);
 		public static bool TryGetValuesT1<T1, T2>(this BimapManyToMany<T1, T2> bimap, T1 key, out IEnumerable<T2> values) => bimap.TryGetValues(key, out values);
 		public static bool TryGetValuesT2<T1, T2>(this BimapManyToMany<T1, T2> bimap, T2 key, out IEnumerable<T1> values) => bimap.TryGetValues(key, out values);
+	}
+}
+
+namespace CircularLinkedListExtensions {
+	public static class Extensions {
+		public static LinkedListNode<T> GetNextCircular<T>(this LinkedListNode<T> node) {
+			return node.Next ?? node.List.First;
+		}
+		public static LinkedListNode<T> GetPreviousCircular<T>(this LinkedListNode<T> node) {
+			return node.Previous ?? node.List.Last;
+		}
 	}
 }

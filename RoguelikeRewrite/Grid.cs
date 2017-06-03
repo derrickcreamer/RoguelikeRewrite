@@ -209,6 +209,7 @@ namespace Grids {
 		//todo: xml note that this one is flattened.
 		public IEnumerable<T> this[IEnumerable<TPosition> positions] {
 			get {
+				if(positions == null) throw new ArgumentNullException(nameof(positions));
 				var returned = new HashSet<TPosition>();
 				foreach(TPosition p in positions) {
 					if(!returned.Add(p)) continue; // If this position has already been considered, skip it.
@@ -270,7 +271,7 @@ namespace Grids {
 			if(destination == null) throw new ArgumentNullException(nameof(destination));
 			if(!map.TryGetValues(source, out IEnumerable<T> contents)) return true; // Nothing to move, return true.
 			if(!isInBounds(destination)) return false; // Can't move there, return false.
-			foreach(var element in contents) map[element] = destination;
+			foreach(var element in contents.ToArray()) map[element] = destination;
 			return true;
 		}
 		/// <summary>
@@ -294,20 +295,22 @@ namespace Grids {
 			bool found1 = map.TryGetValues(source1, out IEnumerable<T> contents1);
 			if(map.TryGetValues(source2, out IEnumerable<T> contents2)) {
 				if(found1) { // Both present: swap
+					contents1 = contents1.ToArray();
+					contents2 = contents2.ToArray();
 					foreach(var element1 in contents1) map[element1] = source2;
 					foreach(var element2 in contents2) map[element2] = source1;
 					return true;
 				}
 				else { // One present: move
 					if(!isInBounds(source1)) return false;
-					foreach(var element2 in contents2) map[element2] = source1;
+					foreach(var element2 in contents2.ToArray()) map[element2] = source1;
 					return true;
 				}
 			}
 			else {
 				if(found1) { // One present: move
 					if(!isInBounds(source2)) return false;
-					foreach(var element1 in contents1) map[element1] = source2;
+					foreach(var element1 in contents1.ToArray()) map[element1] = source2;
 					return true;
 				}
 				else return true; // None present
@@ -321,6 +324,7 @@ namespace Grids {
 			if(newElement == null) throw new ArgumentNullException(nameof(newElement));
 			if(map.TryGetValue(replacedElement, out TPosition position) && !map.Contains(newElement)) {
 				map[newElement] = position;
+				map.Remove(replacedElement);
 				return true;
 			}
 			return false;

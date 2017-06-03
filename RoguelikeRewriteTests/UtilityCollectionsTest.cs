@@ -231,4 +231,74 @@ namespace UtilityCollectionsTests {
 			Assert.Throws<ArgumentNullException>(() => bimap.Remove(null));
 		}
 	}
+
+	[TestFixture] public class PriorityQueueTest {
+		[TestCase] public void PQBasicOperations() {
+			var pq = new PriorityQueue<>
+		}
+	}
+
+	[TestFixture] public class OrderingCollectionTest {
+		OrderingCollection<object> oc;
+		[SetUp] public void Init() {
+			oc = new OrderingCollection<object>();
+		}
+		[TestCase] public void OrderingBasicOperations() {
+			object o1 = new object(), o2 = new object();
+			Assert.AreEqual(0, oc.Count);
+			oc.InsertAtEnd(o1);
+			oc.InsertAtStart(o2);
+			Assert.AreEqual(2, oc.Count);
+			Assert.IsTrue(oc.Contains(o1) && oc.Contains(o2));
+			Assert.AreEqual(1, oc.Compare(o1, o2));
+			Assert.AreEqual(-1, oc.Compare(o2, o1));
+			Assert.AreEqual(0, oc.Compare(o1, o1));
+			Assert.IsTrue(oc.Remove(o1) && oc.Remove(o2));
+			Assert.IsFalse(oc.Contains(o1) || oc.Contains(o2));
+			Assert.AreEqual(0, oc.Count);
+		}
+		[TestCase] public void OrderingNullAndMissing() {
+			Assert.IsFalse(oc.Contains(new object()));
+			Assert.IsFalse(oc.Remove(new object()));
+			Assert.Throws<ArgumentNullException>(() => oc.Contains(null));
+			Assert.Throws<ArgumentNullException>(() => oc.Remove(null));
+			Assert.Throws<ArgumentNullException>(() => oc.Compare(null, null));
+			Assert.Throws<KeyNotFoundException>(() => oc.Compare(new object(), new object()));
+			Assert.Throws<ArgumentNullException>(() => oc.InsertAtStart(null));
+			Assert.Throws<ArgumentNullException>(() => oc.InsertAtEnd(null));
+			Assert.Throws<ArgumentNullException>(() => oc.InsertAfter(null, null));
+			Assert.Throws<ArgumentNullException>(() => oc.InsertBefore(null, null));
+			Assert.Throws<KeyNotFoundException>(() => oc.InsertAfter(new object(), new object()));
+			Assert.Throws<KeyNotFoundException>(() => oc.InsertBefore(new object(), new object()));
+		}
+		[TestCase] public void OrderingInsert() {
+			object o1 = new object(), o2 = new object(), o3 = new object(), o4 = new object(), o5 = new object();
+			oc.InsertAtEnd(o1); // Current order: o1
+			Assert.Throws<InvalidOperationException>(() => oc.InsertAtStart(o1));
+			oc.InsertBefore(null, o2); // Current order: o1 o2
+			Assert.AreEqual(-1, oc.Compare(o1, o2));
+			oc.InsertAfter(null, o3); // Current order: o3 o1 o2
+			Assert.AreEqual(-1, oc.Compare(o3, o1));
+			Assert.AreEqual(1, oc.Compare(o2, o3));
+			oc.InsertBefore(o2, o4); // Current order: o3 o1 o4 o2
+			Assert.AreEqual(1, oc.Compare(o4, o1));
+			Assert.AreEqual(-1, oc.Compare(o4, o2));
+			oc.InsertAfter(o2, o5); // Current order: o3 o1 o4 o2 o5
+			Assert.AreEqual(1, oc.Compare(o5, o2));
+			Assert.AreEqual(1, oc.Compare(o5, o1));
+		}
+		[TestCase] public void OrderingCustomComparer() {
+			var oc2 = new OrderingCollection<string>(new StringLengthEqualityComparer());
+			oc2.InsertAtEnd("aaa");
+			Assert.Throws<InvalidOperationException>(() => oc2.InsertAtStart("bbb")); // Length 3 string already exists
+			Assert.IsTrue(oc2.Contains("ccc"));
+			Assert.AreEqual(0, oc2.Compare("ddd", "eee"));
+			Assert.AreEqual(1, oc2.Count);
+			Assert.IsTrue(oc2.Remove("fff"));
+			Assert.AreEqual(0, oc2.Count);
+			oc2.InsertAtStart("AA");
+			oc2.InsertBefore("BB", "----");
+			Assert.AreEqual(-1, oc2.Compare("!!!!", "??"));
+		}
+	}
 }

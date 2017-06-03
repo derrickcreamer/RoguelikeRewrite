@@ -21,3 +21,130 @@ namespace RoguelikeRewrite {
 		}
 	}
 }
+
+namespace AnotherGameEventTry {
+	public abstract class GameEventResult { }
+	public class EmptyResult : GameEventResult { }
+	public abstract class GameEvent {
+		public abstract GameEventResult Do();
+	}
+
+	public class MonsterSpawnEventResult : GameEventResult { }
+	public class MonsterSpawnEvent : GameEvent {
+		public override GameEventResult Do() {
+			return new EmptyResult();
+			return new MonsterSpawnEventResult();
+		}
+	}
+}
+
+/*namespace YetAnother {
+	public class EventResult { }
+	public abstract class GameEvent {
+		public abstract EventResult Do();
+	}
+
+	public class MonsterSpawnEventResult : GameEventResult { }
+	public class MonsterSpawnEvent : GameEvent {
+		public override GameEventResult Do() {
+			return new EmptyResult();
+			return new MonsterSpawnEventResult();
+		}
+	}
+}*/
+namespace YA2 {
+	public class EvResult{ }
+	public abstract class Event {
+		public abstract void Do();
+	}
+	public class Event<T> : Event {
+		public override void Do(){ DoOther(); }
+		public virtual T DoOther(){ return default(T); }
+	}
+	public static class Doer {
+		public static void Do(Event e) {
+			e.Do();
+		}
+	}
+}
+namespace YA3 {
+	public class EventScheduling {
+		IEvent scheduledEvent;
+	}
+	public class GameQueue {
+		List<EventScheduling> stuff;
+	}
+	public interface IEvent {
+		void Do();
+		//int Tiebreaker{ get; } // TiebreakOrder?
+	}
+	public abstract class Event<T> : IEvent {
+		public bool AlreadyExecuted => false; //todo...
+
+		public bool IsDead => false;
+
+		public void Do() { DoOther(); }
+		public abstract T DoOther();
+	}
+	public static class Doer {
+		public static void Do(IEvent e) {
+			e.Do();
+		}
+	}
+	public class SpawnArgs{ }
+	public class SpawnResult{ }
+	public class SpawnEvent : Event<SpawnResult> {
+		private SpawnArgs args;
+		public SpawnArgs Args => args;
+		public SpawnEvent(SpawnArgs args) {
+			//if(args.Target != null) args.Target.OnDeath += x => dead = true;
+			//if(args.Destination != null) args.Destination.OnDestruction += x => {
+			//  args.Destination = FindNewDestination();
+			//};
+			//etc...and then don't forget to unsub when the event happens.
+		}
+
+		public override SpawnResult DoOther() {
+			throw new NotImplementedException(); //todo
+		}
+		/*public override SpawnResult DoOther() {
+	var x = new[] {
+		1, 2
+	};
+	new List<RoguelikeRewrite.GameEvent> {
+		new RoguelikeRewrite.GameEvent {
+		 executionTime = 1
+		} 
+	}
+	if(Args != null) {
+		return new SpawnResult();
+		// args.Target.OnDeath -= 
+	}
+	Doer.Do(this);
+
+	return null;
+}*/
+	}
+	public class TestCreature {
+		bool dead;
+
+		void TakeDamage() {
+			// pretend to subtract hp here
+			// if hp <= 0...
+			dead = true;
+			onDeath?.Invoke();
+		}
+
+		private Action onDeath;
+
+		public event Action OnDeath {
+			add {
+				if(dead) value.Invoke();
+				else onDeath += value;
+			}
+			remove {
+				onDeath -= value;
+			}
+		}
+	}
+}

@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace UtilityCollections { // Updated 2017-05-27
+namespace UtilityCollections { // Updated 2017-06-17
 	using CircularLinkedListExtensions;
 	/// <summary>
 	/// A hashset with an indexer for convenience.
@@ -68,6 +68,9 @@ namespace UtilityCollections { // Updated 2017-05-27
 		IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
 	}
 
+	/// <summary>
+	/// A collection for mapping one key to any number of values
+	/// </summary>
 	public class MultiValueDictionary<TKey, TValue> : IEnumerable<IGrouping<TKey, TValue>> {
 		private Dictionary<TKey, ICollection<TValue>> d;
 		private readonly Func<ICollection<TValue>> createCollection;
@@ -95,11 +98,16 @@ namespace UtilityCollections { // Updated 2017-05-27
 			return new MultiValueDictionary<TKey, TValue>(() => new TCollection(), comparer);
 		}
 		public IEqualityComparer<TKey> Comparer => d.Comparer;
-		//todo: xml note that empty collections can be returned?
+		/// <summary>
+		/// Returns all groupings of one key to some (nonzero) number of values
+		/// </summary>
 		public IEnumerator<IGrouping<TKey, TValue>> GetEnumerator() {
-			foreach(var pair in d) yield return new Grouping<TKey, TValue>(pair.Key, pair.Value);
+			foreach(var pair in d) if(pair.Value.Count > 0) yield return new Grouping<TKey, TValue>(pair.Key, pair.Value);
 		}
 		IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
+		/// <summary>
+		/// Returns all pairs of one key to one value
+		/// </summary>
 		public IEnumerable<KeyValuePair<TKey, TValue>> GetAllKeyValuePairs() {
 			foreach(var pair in d) {
 				foreach(var v in pair.Value) {
@@ -107,7 +115,13 @@ namespace UtilityCollections { // Updated 2017-05-27
 				}
 			}
 		}
-		public ICollection<TKey> GetAllKeys() => d.Keys;
+		/// <summary>
+		/// Returns all keys with at least one value
+		/// </summary>
+		public ICollection<TKey> GetAllKeys() => d.Where(pair => pair.Value.Count > 0).Select(pair => pair.Key).ToArray();
+		/// <summary>
+		/// Returns all values in the collection
+		/// </summary>
 		public IEnumerable<TValue> GetAllValues() {
 			foreach(var collection in d.Values) {
 				foreach(var v in collection) {
@@ -115,7 +129,9 @@ namespace UtilityCollections { // Updated 2017-05-27
 				}
 			}
 		}
-		//todo: xml, note 'out' value is not null
+		/// <summary>
+		/// Retrieves the values for a given key. Returns true if the key has at least one value. (If no values are present, 'values' is empty, NOT null.)
+		/// </summary>
 		public bool TryGetValues(TKey key, out IEnumerable<TValue> values) {
 			if(d.TryGetValue(key, out ICollection<TValue> collection)) {
 				values = collection;
@@ -126,23 +142,29 @@ namespace UtilityCollections { // Updated 2017-05-27
 				return false;
 			}
 		}
+		/// <summary>
+		/// GET: Retrieves the values for a given key.  SET: Replaces the given key's values with a new collection.
+		/// </summary>
 		public IEnumerable<TValue> this[TKey key] {
 			get {
 				ICollection<TValue> values;
 				if(d.TryGetValue(key, out values)) return values;
 				else return Enumerable.Empty<TValue>();
 			}
-			//todo: xml: This one replaces the entire contents of this key.
 			set {
-				if(value == null) throw new ArgumentNullException("value"); //todo: should xml explain that null throws, so use Clear instead?
-				ICollection<TValue> coll = createCollection();
-				foreach(TValue v in value) {
-					coll.Add(v);
+				if(value == null) {
+					Clear(key);
 				}
-				d[key] = coll;
+				else {
+					ICollection<TValue> coll = createCollection();
+					foreach(TValue v in value) {
+						coll.Add(v);
+					}
+					d[key] = coll;
+				}
 			}
 		}
-		//todo: possible xml note: "if you want duplicate values to be ignored, consider creating this collection with HashSet"
+		//possible xml note: "if you want duplicate values to be ignored, consider creating this collection with HashSet"
 		public void Add(TKey key, TValue value) {
 			ICollection<TValue> values;
 			if(!d.TryGetValue(key, out values)) {
@@ -168,7 +190,7 @@ namespace UtilityCollections { // Updated 2017-05-27
 			}
 			return false;
 		}
-		//todo: possible xml note: suggest HashSet here too, "if you're using AddUnique exclusively".
+		//possible xml note: suggest HashSet here too, "if you're using AddUnique exclusively".
 		public bool AddUnique(TKey key, TValue value) {
 			ICollection<TValue> values;
 			if(d.TryGetValue(key, out values)) {
@@ -450,22 +472,45 @@ namespace UtilityCollections { // Updated 2017-05-27
 	/// <typeparam name="T">The type of element in this priority queue</typeparam>
 	/// <typeparam name="TSortKey">The type of the sort key that will be used to order the elements</typeparam>
 	public class PriorityQueue<T, TSortKey> : IEnumerable<T>, IReadOnlyCollection<T> {
+		/// <param name="keySelector">The function by which the sort key is found, for each element</param>
+		/// <param name="descending">If set to true, the elements with the highest sort order will be dequeued first, instead of last</param>
 		public PriorityQueue(Func<T, TSortKey> keySelector, bool descending = false)
 			: this(keySelector, Comparer<TSortKey>.Default.Compare, descending) { }
+		/// <param name="keySelector">The function by which the sort key is found, for each element</param>
+		/// <param name="compare">Defines a custom comparer for sort keys</param>
+		/// <param name="descending">If set to true, the elements with the highest sort order will be dequeued first, instead of last</param>
 		public PriorityQueue(Func<T, TSortKey> keySelector, Func<TSortKey, TSortKey, int> compare, bool descending = false) {
 			if(keySelector == null) throw new ArgumentNullException(nameof(keySelector));
 			if(compare == null) compare = Comparer<TSortKey>.Default.Compare;
 			set = new SortedSet<PQElement>(new PriorityQueueComparer(descending, keySelector, compare));
 			DescendingOrder = descending;
 		}
+		/// <param name="keySelector">The function by which the sort key is found, for each element</param>
+		/// <param name="collection">The priority queue will be initialized with this collection</param>
+		/// <param name="descending">If set to true, the elements with the highest sort order will be dequeued first, instead of last</param>
+		public PriorityQueue(Func<T, TSortKey> keySelector, IEnumerable<T> collection, bool descending = false)
+			: this(keySelector, (Func<TSortKey, TSortKey, int>)null, descending) {
+			if(collection != null) foreach(T item in collection) Enqueue(item);
+		}
+		/// <param name="keySelector">The function by which the sort key is found, for each element</param>
+		/// <param name="collection">The priority queue will be initialized with this collection</param>
+		/// <param name="compare">Defines a custom comparer for sort keys</param>
+		/// <param name="descending">If set to true, the elements with the highest sort order will be dequeued first, instead of last</param>
 		public PriorityQueue(Func<T, TSortKey> keySelector, IEnumerable<T> collection, Func<TSortKey, TSortKey, int> compare = null, bool descending = false)
 			: this(keySelector, compare, descending) {
-			foreach(T item in collection) Enqueue(item);
+			if(collection != null) foreach(T item in collection) Enqueue(item);
 		}
+		/// <param name="keySelector">The function by which the sort key is found, for each element</param>
+		/// <param name="compare">Defines a custom comparer for sort keys</param>
+		/// <param name="descending">If set to true, the elements with the highest sort order will be dequeued first, instead of last</param>
 		public PriorityQueue(Func<T, TSortKey> keySelector, IComparer<TSortKey> comparer, bool descending = false)
-			: this(keySelector, comparer.Compare, descending) { }
+			: this(keySelector, (comparer == null)? (Func<TSortKey, TSortKey, int>)null : comparer.Compare, descending) { }
+		/// <param name="keySelector">The function by which the sort key is found, for each element</param>
+		/// <param name="collection">The priority queue will be initialized with this collection</param>
+		/// <param name="compare">Defines a custom comparer for sort keys</param>
+		/// <param name="descending">If set to true, the elements with the highest sort order will be dequeued first, instead of last</param>
 		public PriorityQueue(Func<T, TSortKey> keySelector, IEnumerable<T> collection, IComparer<TSortKey> comparer, bool descending = false)
-			: this(keySelector, collection, comparer.Compare, descending) { }
+			: this(keySelector, collection, (comparer == null) ? (Func<TSortKey,TSortKey,int>)null : comparer.Compare, descending) { }
 		private SortedSet<PQElement> set;
 		private struct PQElement {
 			public readonly int idx;
@@ -479,6 +524,8 @@ namespace UtilityCollections { // Updated 2017-05-27
 			private readonly bool descending;
 			private readonly Func<T, TSortKey> getSortKey;
 			private readonly Func<TSortKey, TSortKey, int> compare;
+			public int SortKeyCompare(TSortKey x, TSortKey y) => compare(x, y);
+			public TSortKey GetSortKey(T item) => getSortKey(item);
 			public PriorityQueueComparer(bool descending, Func<T, TSortKey> keySelector, Func<TSortKey, TSortKey, int> compare) {
 				this.descending = descending;
 				getSortKey = keySelector;
@@ -492,30 +539,54 @@ namespace UtilityCollections { // Updated 2017-05-27
 				else return Comparer<int>.Default.Compare(x.idx, y.idx); // Use insertion order as the final tiebreaker.
 			}
 		}
+		/// <summary>
+		/// If true, the elements with the highest sort order will be dequeued first, instead of last
+		/// </summary>
 		public bool DescendingOrder { get; protected set; }
 		private static int nextIdx = 0;
-		public void Enqueue(T item) => set.Add(new PQElement(nextIdx++, item));
+		/// <summary>
+		/// Inserts a new element into the queue according to its sort order
+		/// </summary>
+		public void Enqueue(T item) {
+			if(item == null) throw new ArgumentNullException("item");
+			set.Add(new PQElement(nextIdx++, item));
+		}
+		/// <summary>
+		/// Removes and returns the element with the lowest or highest sort order (depending on DescendingOrder)
+		/// </summary>
 		public T Dequeue() {
 			if(set.Count == 0) throw new InvalidOperationException("The PriorityQueue is empty.");
 			PQElement next = set.Min;
 			set.Remove(next);
 			return next.item;
 		}
+		/// <summary>
+		/// The number of elements in the collection
+		/// </summary>
 		public int Count => set.Count;
+		/// <summary>
+		/// Remove all elements from the collection
+		/// </summary>
 		public void Clear() => set.Clear();
-		public bool Contains(T item) => set.Any(x => x.item.Equals(item));
+		/// <summary>
+		/// Returns true if the given element is present in the collection
+		/// </summary>
+		public bool Contains(T item) {
+			if(item == null) throw new ArgumentNullException("item");
+			return set.Any(x => x.item.Equals(item));
+		}
+		/// <summary>
+		/// Returns (but does not remove) the element with the lowest or highest sort order (depending on DescendingOrder)
+		/// </summary>
 		public T Peek() {
 			if(set.Count == 0) throw new InvalidOperationException("The PriorityQueue is empty.");
 			return set.Min.item;
 		}
 		/// <summary>
-		/// Change the priority of an element (without changing its insertion order). Returns false if not found. This is an O(n) operation.
+		/// Removes the first instance of the given element from the collection. This is an O(n) operation.
 		/// </summary>
-		public bool ChangePriority(T item, Action<T> change) => ChangePriority(item, () => change(item));
-		/// <summary>
-		/// Change the priority of an element (without changing its insertion order). Returns false if not found. This is an O(n) operation.
-		/// </summary>
-		public bool ChangePriority(T item, Action change) {
+		public bool Remove(T item) {
+			if(item == null) throw new ArgumentNullException("item");
 			PQElement? found = null;
 			foreach(var element in set) { // Linear search is the best we can do, given our constraints.
 				if(element.item.Equals(item)) {
@@ -524,10 +595,60 @@ namespace UtilityCollections { // Updated 2017-05-27
 				}
 			}
 			if(found == null) return false;
-			set.Remove(found.Value); // Remove the element before changing - otherwise, the set can't find it.
-			change();
-			set.Add(found.Value); // Add it again with its new priority.
+			set.Remove(found.Value);
 			return true;
+
+		}
+		/// <summary>
+		/// Removes all instances of the given element from the collection. Returns the number of instances removed. This is an O(n) operation.
+		/// </summary>
+		public int RemoveAll(T item) {
+			if(item == null) throw new ArgumentNullException("item");
+			List<PQElement> found = GetAllEntries(item);
+			foreach(var pqElement in found) set.Remove(pqElement);
+			return found.Count;
+		}
+		/// <summary>
+		/// Change the priority of an element (without changing its insertion order). Returns false if not found, but the sort key will be updated regardless. This is an O(n) operation.
+		/// </summary>
+		/// <param name="change">The delegate that will actually change the element's sort key</param>
+		public bool ChangePriority(T item, Action<T> change) {
+			if(change == null) throw new ArgumentNullException("change");
+			return ChangePriority(item, () => change(item));
+		}
+		/// <summary>
+		/// Change the priority of an element (without changing its insertion order). Returns false if not found, but the sort key will be updated regardless. This is an O(n) operation.
+		/// </summary>
+		/// <param name="change">The delegate that will actually change the element's sort key</param>
+		public bool ChangePriority(T item, Action change) {
+			if(item == null) throw new ArgumentNullException("item");
+			if(change == null) throw new ArgumentNullException("change");
+			List<PQElement> found = GetAllEntries(item);
+			// Remove the elements before changing - otherwise, the set can't find them:
+			foreach(var pqElement in found) set.Remove(pqElement);
+			change();
+			// Add the elements again with new priorities:
+			foreach(var pqElement in found) set.Add(pqElement);
+			return found.Count > 0;
+		}
+		private List<PQElement> GetAllEntries(T item) {
+			List<PQElement> found = new List<PQElement>();
+			PriorityQueueComparer comparer = null;
+			TSortKey itemSortKey = default(TSortKey);
+			foreach(var element in set) {
+				// After the first one is found, any duplicate entries must have the same SortKeyCompare result:
+				if(found.Count > 0 && comparer.SortKeyCompare(comparer.GetSortKey(element.item),itemSortKey) != 0) {
+					break; //todo, test this (for both changepriority and removeall)
+				}
+				if(element.item.Equals(item)) {
+					found.Add(element);
+					if(comparer == null) {
+						comparer = set.Comparer as PriorityQueueComparer;
+						itemSortKey = comparer.GetSortKey(item);
+					}
+				}
+			}
+			return found;
 		}
 		public IEnumerator<T> GetEnumerator() {
 			foreach(var x in set) yield return x.item;

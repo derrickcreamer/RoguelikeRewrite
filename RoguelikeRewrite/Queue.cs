@@ -68,8 +68,12 @@ namespace YA2 {
 	}
 }
 namespace YA3 {
-	public class EventScheduling {
+	public class EventScheduling { //todo, name?
 		IEvent scheduledEvent;
+		public int delay, executionTick; //todo
+		//init
+		//todo, timing stuff here, right?
+		//todo, will alreadyexecuted/isdead be moved here?
 	}
 	public class GameQueue {
 		List<EventScheduling> stuff;
@@ -79,11 +83,11 @@ namespace YA3 {
 		//int Tiebreaker{ get; } // TiebreakOrder?
 	}
 	public abstract class Event<T> : IEvent {
-		public bool AlreadyExecuted => false; //todo...
+		public bool AlreadyExecuted => false; //todo, will these 2(?) be moved to EventScheduling?
 
 		public bool IsDead => false;
 
-		public void Do() { DoOther(); }
+		public void Do() { DoOther(); } //todo, i think this works, but these obviously need renaming.
 		public abstract T DoOther();
 	}
 	public static class Doer {

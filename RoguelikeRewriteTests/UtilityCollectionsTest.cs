@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using NUnit.Framework;
 using UtilityCollections;
 
@@ -234,7 +235,62 @@ namespace UtilityCollectionsTests {
 
 	[TestFixture] public class PriorityQueueTest {
 		[TestCase] public void PQBasicOperations() {
-			var pq = new PriorityQueue<>
+			var pq = new PriorityQueue<Exception, int>(ex => ex.Message.Length);
+			Assert.AreEqual(0, pq.Count);
+			pq.Enqueue(new Exception("short message"));
+			Assert.AreEqual(1, pq.Count);
+			pq.Enqueue(new Exception("a longer message"));
+			Assert.AreEqual(2, pq.Count);
+			Exception ex1 = pq.Peek();
+			Assert.AreEqual(2, pq.Count); // Not removed
+			Assert.AreSame(ex1, pq.Dequeue()); // Remove and verify it's the same one returned by Peek().
+			Assert.AreEqual(1, pq.Count);
+			pq.Clear();
+			Assert.AreEqual(0, pq.Count);
+		}
+		[TestCase] public void PQAdvancedOperations() {
+			var coll = new[]{ "4444", "1", "333", "22" };
+			var pq1 = new PriorityQueue<string, int>(s => s.Length, coll, false);
+			var pq2 = new PriorityQueue<string, int>(s => s.Length, coll, true);
+			Assert.AreEqual("1", pq1.Peek()); // Ascending
+			Assert.AreEqual("4444", pq2.Peek()); // Descending
+			var pq1out = pq1.ToArray();
+			Assert.IsTrue(pq1out.SequenceEqual(new[]{ "1", "22", "333", "4444" }));
+			Assert.IsTrue(pq1out.SequenceEqual(pq2.ToArray().Reverse()));
+		}
+
+		private class ObjWithInt { public int i; }
+
+		[TestCase] public void PQChangePriority() {
+			var pq = new PriorityQueue<ObjWithInt, int>(x => x.i);
+			var obj1 = new ObjWithInt{ i = 5 };
+			var obj2 = new ObjWithInt { i = 5 };
+			var obj3 = new ObjWithInt { i = 5 };
+			pq.Enqueue(obj1);
+			pq.Enqueue(obj2);
+			pq.Enqueue(obj3);
+			Assert.AreSame(obj1, pq.Peek()); // Insertion order
+			pq.ChangePriority(obj1, () => obj1.i = 9);
+			Assert.AreSame(obj2, pq.Peek()); // obj1 has moved to the back
+			pq.ChangePriority(obj3, () => obj3.i = 9);
+			Assert.AreSame(obj2, pq.Peek()); // obj3 has moved to the back, obj2 is still in front
+			pq.ChangePriority(obj2, () => obj2.i = 9);
+			Assert.AreSame(obj1, pq.Dequeue()); // All 3 now have the same value, and therefore insertion order is used again
+			Assert.AreSame(obj2, pq.Dequeue());
+			Assert.AreSame(obj3, pq.Dequeue());
+		}
+		[TestCase] public void PQNulls() {
+			Assert.Throws<ArgumentNullException>(() => new PriorityQueue<string, int>(null)); // Null key selector
+			var pq1 = new PriorityQueue<string, int>(s => s.Length, (IComparer<int>)null); // No exception, default comparer.
+			var pq2 = new PriorityQueue<string, int>(s => s.Length, null, (IComparer<int>)null, true); // Null collection, no exception.
+			Assert.Throws<ArgumentNullException>(() => pq1.Enqueue(null));
+			Assert.Throws<ArgumentNullException>(() => pq1.Contains(null));
+			Assert.Throws<ArgumentNullException>(() => pq1.Remove(null));
+			Assert.Throws<ArgumentNullException>(() => pq1.RemoveAll(null));
+			Assert.Throws<ArgumentNullException>(() => pq1.ChangePriority(null, s => s.Contains("")));
+			Assert.Throws<ArgumentNullException>(() => pq1.ChangePriority(null, () => { }));
+			Assert.Throws<ArgumentNullException>(() => pq1.ChangePriority("", (Action)null));
+			Assert.Throws<ArgumentNullException>(() => pq1.ChangePriority("",(Action<string>)null));
 		}
 	}
 

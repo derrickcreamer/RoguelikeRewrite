@@ -65,6 +65,7 @@
     <Compile Include="GameEventScheduler3.cs" />
     <Compile Include="GameEventScheduler4.cs" />
     <Compile Include="Grid.cs" />
+    <Compile Include="SerializationHelper.cs" />
     <Compile Include="UtilityCollections.cs" />
     <Compile Include="Game.cs" />
     <Compile Include="Map.cs" />

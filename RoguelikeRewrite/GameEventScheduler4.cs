@@ -42,11 +42,40 @@ namespace RoguelikeRewrite4 {
 		public int ExecutionTime;
 		public Initiative Initiative;
 	}
-	public abstract class Event<T> : IEvent {
+	public class Game { }
+	public class GameObject {
+		public Game Game;
+		public GameObject(Game g) { Game = g; }
+	}
+	public class Creature : GameObject {
+		public Creature(Game g) : base(g) { }
+	}
+	public abstract class Event<T> : GameObject, IEvent {
+		public Event(Game g) : base(g) { }
+
 		public virtual bool IsDead => false; //todo, does it make sense for this to default to false if not overridden?
 		// ... because, the question then becomes whether events should be set to Dead after they execute.
 
 		public void ExecuteEvent() { Execute(); }
 		public abstract T Execute();
+	}
+	public class WalkArgs {
+		public Creature Target;
+	}
+	public class WalkResult {
+
+	}
+	public class WalkEvent : Event<WalkResult> {
+		public WalkArgs Args => args;
+		private WalkArgs args;
+		//todo, add cancel conditions if nec., look at adding Condition dict, look at cancel decider stuff...
+		public WalkEvent(WalkArgs args) : base(args.Target.Game) {
+
+		}
+
+		public override WalkResult Execute() {
+			throw new NotImplementedException();
+		}
+		//todo: and then they need to be serializable in here too...
 	}
 }

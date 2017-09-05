@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
 using NUnit.Framework;
-using Points;
+using GameComponents;
 
 namespace PointTests {
 	[TestFixture] public class PointTest {

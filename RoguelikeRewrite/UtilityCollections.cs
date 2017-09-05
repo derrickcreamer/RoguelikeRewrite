@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace UtilityCollections { // Updated 2017-06-17
+namespace UtilityCollections { // Updated 2017-09-02
 	using CircularLinkedListExtensions;
 	/// <summary>
 	/// A hashset with an indexer for convenience.
@@ -74,19 +74,30 @@ namespace UtilityCollections { // Updated 2017-06-17
 	public class MultiValueDictionary<TKey, TValue> : IEnumerable<IGrouping<TKey, TValue>> {
 		private Dictionary<TKey, ICollection<TValue>> d;
 		private readonly Func<ICollection<TValue>> createCollection;
-		public MultiValueDictionary() : this(null, null) { }
-		public MultiValueDictionary(IEqualityComparer<TKey> comparer) : this(null, comparer) { }
-		private MultiValueDictionary(Func<ICollection<TValue>> createCollection, IEqualityComparer<TKey> comparer = null) {
+		public MultiValueDictionary() : this(null, null, null) { }
+		public MultiValueDictionary(IEqualityComparer<TKey> comparer) : this(null, null, comparer) { }
+		/// <param name="collection">The existing collection of keys & values with which to initialize this collection</param>
+		public MultiValueDictionary(IEnumerable<IGrouping<TKey, TValue>> collection,
+			IEqualityComparer<TKey> comparer) : this(null, collection, comparer) { }
+		private MultiValueDictionary(Func<ICollection<TValue>> createCollection,
+			IEnumerable<IGrouping<TKey, TValue>> existingCollection,
+			IEqualityComparer<TKey> comparer = null)
+		{
 			d = new Dictionary<TKey, ICollection<TValue>>(comparer);
 			if(createCollection == null) createCollection = () => new List<TValue>();
 			this.createCollection = createCollection;
+			if(existingCollection != null) {
+				foreach(var group in existingCollection) {
+					this[group.Key] = group;
+				}
+			}
 		}
 		/// <summary>
 		/// Create a MultiValueDictionary that uses a specific type of ICollection, instead of the default List.
 		/// </summary>
 		/// <typeparam name="TCollection">The type of ICollection to use instead of List</typeparam>
 		public static MultiValueDictionary<TKey, TValue> Create<TCollection>() where TCollection : ICollection<TValue>, new() {
-			return new MultiValueDictionary<TKey, TValue>(() => new TCollection());
+			return new MultiValueDictionary<TKey, TValue>(() => new TCollection(), null, null);
 		}
 		/// <summary>
 		/// Create a MultiValueDictionary that uses a specific type of ICollection, instead of the default List.
@@ -95,14 +106,26 @@ namespace UtilityCollections { // Updated 2017-06-17
 		public static MultiValueDictionary<TKey, TValue> Create<TCollection>(IEqualityComparer<TKey> comparer)
 			where TCollection : ICollection<TValue>, new()
 		{
-			return new MultiValueDictionary<TKey, TValue>(() => new TCollection(), comparer);
+			return new MultiValueDictionary<TKey, TValue>(() => new TCollection(), null, comparer);
+		}
+		/// <summary>
+		/// Create a MultiValueDictionary that uses a specific type of ICollection, instead of the default List.
+		/// </summary>
+		/// <typeparam name="TCollection">The type of ICollection to use instead of List</typeparam>
+		/// <param name="collection">The existing collection of keys & values with which to initialize this collection</param>
+		public static MultiValueDictionary<TKey, TValue> Create<TCollection>(
+			IEnumerable<IGrouping<TKey, TValue>> collection,
+			IEqualityComparer<TKey> comparer)
+			where TCollection : ICollection<TValue>, new()
+		{
+			return new MultiValueDictionary<TKey, TValue>(() => new TCollection(), collection, comparer);
 		}
 		public IEqualityComparer<TKey> Comparer => d.Comparer;
 		/// <summary>
 		/// Returns all groupings of one key to some (nonzero) number of values
 		/// </summary>
 		public IEnumerator<IGrouping<TKey, TValue>> GetEnumerator() {
-			foreach(var pair in d) if(pair.Value.Count > 0) yield return new Grouping<TKey, TValue>(pair.Key, pair.Value);
+			foreach(var pair in d) if(pair.Value.Count > 0) yield return new Grouping<TKey, TValue>(pair.Key, pair.Value.ToArray());
 		}
 		IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
 		/// <summary>
@@ -134,7 +157,7 @@ namespace UtilityCollections { // Updated 2017-06-17
 		/// </summary>
 		public bool TryGetValues(TKey key, out IEnumerable<TValue> values) {
 			if(d.TryGetValue(key, out ICollection<TValue> collection)) {
-				values = collection;
+				values = collection.ToArray();
 				return collection.Count > 0;
 			}
 			else {
@@ -148,7 +171,7 @@ namespace UtilityCollections { // Updated 2017-06-17
 		public IEnumerable<TValue> this[TKey key] {
 			get {
 				ICollection<TValue> values;
-				if(d.TryGetValue(key, out values)) return values;
+				if(d.TryGetValue(key, out values)) return values.ToArray();
 				else return Enumerable.Empty<TValue>();
 			}
 			set {
@@ -164,6 +187,14 @@ namespace UtilityCollections { // Updated 2017-06-17
 				}
 			}
 		}
+		/// <summary>
+		/// Returns the number of keys that have at least 1 value
+		/// </summary>
+		public int GetKeyCount() => d.Count(pair => pair.Value.Count > 0);
+		/// <summary>
+		/// Returns the number of values in the collection
+		/// </summary>
+		public int GetValueCount() => d.Sum(pair => pair.Value.Count);
 		//possible xml note: "if you want duplicate values to be ignored, consider creating this collection with HashSet"
 		public void Add(TKey key, TValue value) {
 			ICollection<TValue> values;
@@ -650,6 +681,9 @@ namespace UtilityCollections { // Updated 2017-06-17
 			}
 			return found;
 		}
+		public IEnumerable<T> GetAllInInsertionOrder() {
+			foreach(var pqelement in set.OrderBy(x => x.idx)) yield return pqelement.item;
+		}
 		public IEnumerator<T> GetEnumerator() {
 			foreach(var x in set) yield return x.item;
 		}
@@ -659,7 +693,7 @@ namespace UtilityCollections { // Updated 2017-06-17
 	/// <summary>
 	/// Maintains a totally ordered set, offering constant time comparison of the relative order of its elements.
 	/// </summary>
-	public class OrderingCollection<T> {
+	public class OrderingCollection<T> : IEnumerable<T> {
 		// Based on "Two Algorithms for Maintaining Order in a List", Sleator and Dietz, 1988
 		private class OrderingNode {
 			public T Element;
@@ -676,13 +710,25 @@ namespace UtilityCollections { // Updated 2017-06-17
 
 		private DefaultValueDictionary<T, LinkedListNode<OrderingNode>> dict;
 
-		public OrderingCollection() : this(null) { }
-		public OrderingCollection(IEqualityComparer<T> comparer) {
+		public OrderingCollection() : this(null, null) { }
+		public OrderingCollection(IEqualityComparer<T> comparer) : this(null, comparer) { }
+		public OrderingCollection(IEnumerable<T> collection, IEqualityComparer<T> comparer) {
 			list = new LinkedList<OrderingNode>();
 			BaseRecord = new LinkedListNode<OrderingNode>(new OrderingNode(default(T), 0UL));
 			list.AddFirst(BaseRecord);
 			dict = new DefaultValueDictionary<T, LinkedListNode<OrderingNode>>(comparer);
+			if(collection != null) {
+				foreach(var element in collection) InsertAtEnd(element);
+			}
 		}
+
+		public IEnumerator<T> GetEnumerator() {
+			OrderingNode baseRecordNode = BaseRecord.Value;
+			foreach(var node in list) {
+				if(node != baseRecordNode) yield return node.Element;
+			}
+		}
+		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
 		public bool Contains(T element) => dict.ContainsKey(element);
 

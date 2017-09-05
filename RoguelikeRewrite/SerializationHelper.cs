@@ -3,12 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace SerializationHelper {
+namespace SerializationUtilities { //todo, is there a better namespace?
 	//todo, needs tests
-	public static class SerializerHelper {
+	public static class SerializationHelper {
 		private static class DynamicTypeInfo<T> {
 			public static int TypeIndex;
 			public static Action<T, SaveContext> Save;
@@ -16,11 +14,15 @@ namespace SerializationHelper {
 		}
 
 		private static List<Type> types = new List<Type>();
+		private static HashSet<Type> typeIsRegistered = new HashSet<Type>();
 
 		//todo: make sure the xml & docs reflect that ALL object types should be registered, not just the subclassed ones.
 		public static void RegisterType<T>(Action<T, SaveContext> save, Func<LoadContext, T> load) where T : class {
-			types.Add(typeof(T));
-			DynamicTypeInfo<T>.TypeIndex = types.IndexOf(typeof(T));
+			// Check the hashset first, to achieve idempotence (assuming equivalent save/load methods):
+			if(typeIsRegistered.Add(typeof(T))) {
+				types.Add(typeof(T));
+				DynamicTypeInfo<T>.TypeIndex = types.IndexOf(typeof(T));
+			}
 			DynamicTypeInfo<T>.Save = save;
 			DynamicTypeInfo<T>.Load = load;
 		}

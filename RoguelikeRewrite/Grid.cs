@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UtilityCollections;
 
-namespace Grids {
+namespace GameComponents {
 	//todo: xml: maybe list the main assumptions made by this class:
 	// one element per position, one position per element, moves need explicit calls, uhhh...
 	// maybe mention the default values returned for empty positions.

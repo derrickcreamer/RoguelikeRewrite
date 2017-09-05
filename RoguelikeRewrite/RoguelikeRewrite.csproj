@@ -57,18 +57,15 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Creature.cs" />
+    <Compile Include="EventScheduler.cs" />
     <Compile Include="GameAction.cs" />
     <Compile Include="GameAction2.cs" />
     <Compile Include="GameAction3.cs" />
-    <Compile Include="GameEventScheduler.cs" />
-    <Compile Include="GameEventScheduler2.cs" />
-    <Compile Include="GameEventScheduler3.cs" />
     <Compile Include="GameEventScheduler4.cs" />
     <Compile Include="Grid.cs" />
     <Compile Include="SerializationHelper.cs" />
     <Compile Include="UtilityCollections.cs" />
     <Compile Include="Game.cs" />
-    <Compile Include="Map.cs" />
     <Compile Include="PosArray.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

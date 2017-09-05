@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using Points;
 using UtilityCollections;
-using Grids;
+using GameComponents;
 
 namespace RoguelikeRewrite {
-	public class Game {
+	public class GameUniverse {
 		public bool Suspend;
 		public GameEventQueue Q;
 		public Grid<Creature, Point> Creatures;
@@ -17,7 +16,7 @@ namespace RoguelikeRewrite {
 				Q.ExecuteNextEvent();
 			}
 		}
-		public Game() {
+		public GameUniverse() {
 			//todo, RNG seed here?
 			//one parameterless constructor, one RNG seeded, and one for loading a saved game? or not?
 			// should the constructor do all this stuff directly, or should there be some kind of Reset() method, just in case?
@@ -26,12 +25,12 @@ namespace RoguelikeRewrite {
 		}
 	}
 	public class GameObject { // todo: One more major question: Do different GameObjects actually kind of want different sets? Like the map generator only having the DungeonRNG, not the normal RNG.
-		public Game Game;
-		public GameObject(Game g) { Game = g; }
+		public GameUniverse GameUniverse;
+		public GameObject(GameUniverse g) { GameUniverse = g; }
 
-		public GameEventQueue Q => Game.Q;
-		public Grid<Creature, Point> Creatures => Game.Creatures;
+		public GameEventQueue Q => GameUniverse.Q;
+		public Grid<Creature, Point> Creatures => GameUniverse.Creatures;
 		//rng
-		public Creature CreatureAt(Point p) => Game.Creatures[p];
+		public Creature CreatureAt(Point p) => GameUniverse.Creatures[p];
 	}
 }

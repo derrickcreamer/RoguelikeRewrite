@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
-using Grids;
+using GameComponents;
 
 namespace GridTests {
 	public class Thing { }

@@ -1,12 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 using UtilityCollections;
 
-namespace RoguelikeRewrite4 {
+namespace GameComponents {
+	public abstract class Initiative { }
+	public interface IEvent {
+		void ExecuteEvent();
+	}
+	public abstract class EventScheduling {
+		public IEvent Event { get; protected set; }
+		public long CreationTick { get; protected set; }
+		public long Delay { get; protected set; }
+		protected Initiative initiative;
+		public long ExecutionTick => CreationTick + Delay;
+		protected EventScheduling(IEvent scheduledEvent, long currentTick, long delay, Initiative init) {
+			Event = scheduledEvent;
+			CreationTick = currentTick;
+			Delay = delay;
+			initiative = init;
+		}
+	}
 	public class EventScheduler {
 		private long currentTick;
 		private PriorityQueue<InternalEventScheduling, InternalEventScheduling> pq;
@@ -35,8 +50,7 @@ namespace RoguelikeRewrite4 {
 		private EventScheduler(
 			IEnumerable<Initiative> inits,
 			IEnumerable<InternalEventScheduling> eventSchedulings,
-			IEnumerable<IGrouping<AutoInitiative, InternalEventScheduling>> eventsForInits)
-		{
+			IEnumerable<IGrouping<AutoInitiative, InternalEventScheduling>> eventsForInits) {
 			pq = new PriorityQueue<InternalEventScheduling, InternalEventScheduling>(x => x, eventSchedulings, CompareEventSchedulings);
 			oc = new OrderingCollection<Initiative>(inits, null);
 			scheduledEventsForInitiatives = new MultiValueDictionary<AutoInitiative, InternalEventScheduling>(eventsForInits, null);
@@ -153,8 +167,7 @@ namespace RoguelikeRewrite4 {
 			BinaryWriter writer,
 			Action<EventScheduling, BinaryWriter> onSaveEventScheduling,
 			Action<Initiative, BinaryWriter> onSaveInitiative,
-			Action<IEvent, BinaryWriter> saveIEvent)
-		{
+			Action<IEvent, BinaryWriter> saveIEvent) {
 			//todo test this
 			if(saveIEvent == null) throw new ArgumentNullException(nameof(saveIEvent));
 			if(scheduler == null) throw new ArgumentNullException(nameof(scheduler));
@@ -218,8 +231,7 @@ namespace RoguelikeRewrite4 {
 		public static EventScheduler Deserialize(BinaryReader reader,
 			Action<EventScheduling, BinaryReader> onLoadEventScheduling,
 			Action<Initiative, BinaryReader> onLoadInitiative,
-			Func<BinaryReader, IEvent> loadIEvent)
-		{
+			Func<BinaryReader, IEvent> loadIEvent) {
 			if(loadIEvent == null) throw new ArgumentNullException(nameof(loadIEvent));
 			if(reader == null) throw new ArgumentNullException(nameof(reader));
 			//dict of id -> obj this time...
@@ -291,61 +303,5 @@ namespace RoguelikeRewrite4 {
 			// 'eventsForInits' now ready for use
 			return new EventScheduler(inits, events, eventsForInits);
 		}
-	}
-	public abstract class Initiative { }
-	public interface IEvent {
-		void ExecuteEvent();
-	}
-	public abstract class EventScheduling {
-		public IEvent Event { get; protected set; }
-		public long CreationTick { get; protected set; }
-		public long Delay { get; protected set; }
-		protected Initiative initiative;
-		public long ExecutionTick => CreationTick + Delay;
-		protected EventScheduling(IEvent scheduledEvent, long currentTick, long delay, Initiative init) {
-			Event = scheduledEvent;
-			CreationTick = currentTick;
-			Delay = delay;
-			initiative = init;
-		}
-	}
-	public class Game { }
-	public class GameObject {
-		public Game Game;
-		public GameObject(Game g) { Game = g; }
-	}
-	public class Creature : GameObject {
-		public Creature(Game g) : base(g) { }
-	}
-	public abstract class Event<T> : GameObject, IEvent {
-		public Event(Game g) : base(g) { }
-
-		protected bool IsDead;
-
-		public void ExecuteEvent() {
-			// todo: insert explanation for why IsDead kinda makes sense here, but not on IEvent.
-			// (tl;dr a dead event isn't allowed to have side effects, and we already know that its return value is being ignored here)
-			if(!IsDead) Execute();
-		}
-		public abstract T Execute();
-	}
-	public class WalkArgs {
-		public Creature Target;
-	}
-	public class WalkResult {
-
-	}
-	public class WalkEvent : Event<WalkResult> {
-		public WalkArgs Args => args;
-		private WalkArgs args;
-		//todo, add cancel conditions if nec., look at adding Condition dict, look at cancel decider stuff...
-		public WalkEvent(WalkArgs args) : base(args.Target.Game) {
-
-		}
-
-		public override WalkResult Execute() {
-			throw new NotImplementedException();
-		}
-		//todo: and then they need to be serializable in here too...
 	}
 }

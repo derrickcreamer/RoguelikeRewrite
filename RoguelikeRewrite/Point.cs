@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace Points {
+namespace GameComponents {
 	public struct Point : IEquatable<Point> {
 		public readonly int x, y;
 

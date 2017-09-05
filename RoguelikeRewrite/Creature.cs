@@ -1,5 +1,5 @@
 ﻿using System;
-using Points;
+using GameComponents;
 
 namespace RoguelikeRewrite {
 	public static class MoveAction2 {
@@ -21,7 +21,7 @@ namespace RoguelikeRewrite {
 	}
 
 	public class Creature : GameObject {
-		public Creature(Game g) : base(g) {
+		public Creature(GameUniverse g) : base(g) {
 			//
 		}
 		public void Walk(Point p) {

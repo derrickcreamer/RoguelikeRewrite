@@ -26,6 +26,13 @@ namespace PointTests {
 			Assert.AreEqual(new Point(-3, -2), one - 4);
 			Assert.AreEqual(new Point(-2, -7), -two);
 		}
+
+		[TestCase] public void PointDistance() {
+			Point one = new Point(2, 2);
+			Point two = new Point(1, -5);
+			Assert.AreEqual(7, one.ChebyshevDistanceFrom(two));
+			Assert.AreEqual(8, one.ManhattanDistanceFrom(two));
+		}
 	}
 	[TestFixture] public class RectangleTest {
 		[TestCase] public void RectangleCreationAndEquality() {
@@ -63,6 +70,11 @@ namespace PointTests {
 			Assert.IsTrue(one == three.Grow(2));
 			CellRectangle four = three.Translate(new Point(3, -8));
 			Assert.IsTrue(four == new CellRectangle(new Point(5, -6), new Point(-3, 0)));
+			CellRectangle five = CellRectangle.CreateFromSize(0, 0, 8, 4);
+			CellRectangle six = five.Grow(-1, 1);
+			Assert.IsTrue(six == CellRectangle.CreateFromSize(1, -1, 6, 6));
+			CellRectangle seven = five.Shrink(3, 0);
+			Assert.IsTrue(seven == CellRectangle.CreateFromSize(3, 0, 2, 4));
 		}
 		[TestCase] public void RectangleContains() {
 			var one = CellRectangle.CreateFromSize(2, 2, 5, 5);

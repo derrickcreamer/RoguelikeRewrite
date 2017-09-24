@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 
-namespace SerializationUtilities { //todo, is there a better namespace?
+namespace SerializationUtility {
 	//todo, needs tests
 	public static class SerializationHelper {
 		private static class DynamicTypeInfo<T> {

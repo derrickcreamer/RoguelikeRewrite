@@ -20,12 +20,11 @@ namespace RoguelikeRewrite {
 		}
 	}
 
+	public enum CreatureState { Normal, Angry, Crazy, Dead };
 	public class Creature : GameObject {
+		public CreatureState State;
 		public Creature(GameUniverse g) : base(g) {
 			//
-		}
-		public void Walk(Point p) {
-			//todo...this might be static only.
 		}
 	}
 }
@@ -447,6 +446,7 @@ namespace anotherTry {
 			ConditionLookup<TCancelCondition, TArgs> conditions,
 			TArgs args)
 		{
+			// todo, why not put this method on ConditionLookup, and use its keys instead of Enum.GetValues?
 			var trueConditions = new HashSet<TCancelCondition>();
 			foreach(TCancelCondition reason in Enum.GetValues(typeof(TCancelCondition))) {
 				if(conditions.Check(reason, args)) {

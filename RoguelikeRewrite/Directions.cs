@@ -169,6 +169,20 @@ namespace GameComponents.DirectionUtility {
 			}
 			return dir;
 		}
+		public static IEnumerable<Point> EnumeratePointsWithinChebyshevDistance(this Point source, int distance,
+			bool clockwise, bool orderByEuclideanDistance, Dir8 startDir = Dir8.N)
+		{
+			if(!startDir.IsValid(false)) throw new ArgumentException("startDir must be an orthogonal or diagonal");
+			if(orderByEuclideanDistance && startDir.IsDiagonal()) {
+				// If ordering by Euclidean distance, we'll be starting at an orthogonal direction anyway:
+				startDir = startDir.Rotate(clockwise);
+			}
+			for(int currentDistance = 0; currentDistance <= distance; ++currentDistance) {
+				foreach(Point p in source.PointsAtChebyshevDistanceInternal(currentDistance, clockwise, orderByEuclideanDistance, startDir)) {
+					yield return p;
+				}
+			}
+		}
 		//todo needs xml notes
 		public static IEnumerable<Dir8> GetDirectionsInArc(this Dir8 dir, int distance, bool clockwise, bool extendArcInBothDirections) {
 			int startIdx;
@@ -441,9 +455,20 @@ namespace GameComponents.DirectionUtility {
 					break;
 			}
 		}
+		public static IEnumerable<Point> EnumeratePointsWithinManhattanDistance(
+			this Point source, int distance, bool clockwise, Dir4 startDir = Dir4.N)
+		{
+			if(!startDir.IsValid(false)) throw new ArgumentException("startDir must be an orthogonal direction");
+			for(int currentDistance = 0; currentDistance <= distance; ++currentDistance) {
+				foreach(Point p in source.PointsAtManhattanDistanceInternal(currentDistance, clockwise, startDir)) {
+					yield return p;
+				}
+			}
+		}
 		public static IEnumerable<Point> EnumeratePointsByManhattanDistance(
 			this Point source, bool clockwise, Dir4 startDir = Dir4.N)
 		{
+			if(!startDir.IsValid(false)) throw new ArgumentException("startDir must be an orthogonal direction");
 			for(int distance = 0; ; ++distance) {
 				foreach(Point p in source.PointsAtManhattanDistanceInternal(distance, clockwise, startDir)) {
 					yield return p;

@@ -17,10 +17,10 @@ namespace RoguelikeRewrite {
 				Point p3 = p2;
 				if(++i >= 1000) break;
 			}
-			return;*/
+			return;
 			foreach(Point p4 in new Point(15, 15).EnumeratePointsByChebyshevDistance(false, true)) {
 				if(++i >= 1000) break;
-			}
+			}*/
 			ConsoleWindow w = new ConsoleWindow(30, 30, "hmm");
 			w.Write(15, 15, '@', OpenTK.Graphics.Color4.YellowGreen);
 			foreach(var dir in Dir8.S.GetDirectionsInArc(2, false, true)) {
@@ -29,7 +29,11 @@ namespace RoguelikeRewrite {
 				System.Threading.Thread.Sleep(1000);
 				if(!w.WindowUpdate()) break;
 			}
-			System.Threading.Thread.Sleep(4000);
+			System.Threading.Thread.Sleep(1000);
+			foreach(var p7 in new Point(15,15).EnumeratePointsWithinChebyshevDistance(8, true, true)) {
+				w.Write(30 - p7.Y, p7.X, '%', OpenTK.Graphics.Color4.RoyalBlue);
+				if(!w.WindowUpdate()) break;
+			}
 			foreach(Point p4 in new Point(15, 15).EnumeratePointsByManhattanDistance(true, Dir4.W)) {
 				w.Write(30-p4.Y, p4.X, '@', OpenTK.Graphics.Color4.Lime);
 				System.Threading.Thread.Sleep(100);

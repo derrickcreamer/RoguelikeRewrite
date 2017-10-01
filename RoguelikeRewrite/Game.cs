@@ -6,6 +6,7 @@ using GameComponents;
 namespace RoguelikeRewrite {
 	public class GameUniverse {
 		public bool Suspend;
+		public Creature Player;
 		public EventScheduler Q;
 		public Grid<Creature, Point> Creatures;
 		//RNG eventually
@@ -33,6 +34,7 @@ namespace RoguelikeRewrite {
 		public GameUniverse GameUniverse;
 		public GameObject(GameUniverse g) { GameUniverse = g; }
 
+		public Creature Player => GameUniverse.Player;
 		public EventScheduler Q => GameUniverse.Q;
 		public Grid<Creature, Point> Creatures => GameUniverse.Creatures;
 		public Creature CreatureAt(Point p) => GameUniverse.Creatures[p];

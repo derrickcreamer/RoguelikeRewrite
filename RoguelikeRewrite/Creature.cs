@@ -24,6 +24,7 @@ namespace RoguelikeRewrite {
 	public class Creature : GameObject {
 		public CreatureState State;
 		public Point Position;
+		public CancelDecider Decider => null; //todo
 		public Creature(GameUniverse g) : base(g) {
 			//
 		}

@@ -3,7 +3,8 @@ using GameComponents;
 using GameComponents.DirectionUtility;
 
 namespace RoguelikeRewrite {
-	//todo, what about some kind of TimedEvent / ITimedEvent here, from which we can get a total time spent?
+	// Event is a separate branch here, used only for a few event types (like player and AI turns).
+	// Most events will return Results objects and inherit from Event<TResult>.
 	public abstract class Event : GameObject, IEvent {
 		public Event(GameUniverse g) : base(g) { }
 		void IEvent.ExecuteEvent() { Execute(); }
@@ -14,22 +15,109 @@ namespace RoguelikeRewrite {
 		void IEvent.ExecuteEvent() { Execute(); }
 		public abstract TResult Execute();
 	}
-	public abstract class CancelableEvent<TResult> : Event<TResult> where TResult : CancelableResult, new() {
+	public interface ITimedEvent {
+		ITimedResult Execute();
+	}
+	public interface ITimedResult {
+		long TotalTime { get; }
+	}
+	public class BasicResult : ITimedResult { //todo name
+		public virtual bool InvalidEvent { get; set; }
+		public virtual long TotalTime { get; set; } = 120; //todo, default? "1.Turn()" or anything?
+	}
+	public abstract class BasicEvent<TResult> : Event<TResult>, ITimedEvent where TResult : BasicResult, new() {
+		public BasicEvent(GameUniverse g) : base(g) { }
+		ITimedResult ITimedEvent.Execute() => Execute();
+		protected virtual TResult Error() => new TResult(){ InvalidEvent = true };
+		protected virtual TResult Done() => new TResult(); //todo! not sure about this. Does it imply any kind of success or failure?
+		public virtual bool IsInvalid => false;
+	}
+	public class CancelableResult : BasicResult {
+		public virtual bool Canceled { get; set; }
+	}
+	public abstract class CancelableEvent<TResult> : BasicEvent<TResult> where TResult : CancelableResult, new() {
 		public CancelableEvent(GameUniverse g) : base(g) { }
 		//note that the NoCancel bool indicates that cancellations will be ignored and
 		// SHOULD not be used, but it's not a hard requirement.
 		public virtual bool NoCancel { get; set; }
-		public virtual TResult Cancel() => new TResult(){ Canceled = true };
+		protected virtual TResult Cancel() => new TResult(){ Canceled = true };
 	}
-	public class CancelableResult {
-		public virtual bool Canceled { get; set; }
+	//todo, xml: this should return false for types it doesn't recognize
+	public interface ICancelDecider {
+		bool Cancels(object e);
 	}
-	public interface ICancelDecider<TEvent> {
-		bool Cancels(TEvent e);
+	public abstract class CancelDecider : ICancelDecider {
+		public virtual bool? WillCancel(object e) => null;
+		public abstract bool Cancels(object e);
 	}
-	public abstract class CancelDecider<TEvent> : ICancelDecider<TEvent> {
-		public virtual bool? WillCancel(TEvent e) => null;
-		public abstract bool Cancels(TEvent e);
+	public abstract class CancelDecider<T> : CancelDecider {
+		public override bool? WillCancel(object e) {
+			if(e is T t) return WillCancel(t);
+			else return false;
+		}
+		public override bool Cancels(object e) {
+			if(e is T t) return Cancels(t);
+			else return false;
+		}
+		public virtual bool? WillCancel(T e) => null;
+		public abstract bool Cancels(T e);
+	}
+	public abstract class ConvenientTodoCancelableEvent<TResult> : CancelableEvent<TResult> where TResult : CancelableResult, new() {
+		public ConvenientTodoCancelableEvent(GameUniverse g) : base(g) { }
+		//todo, xml: null is fine
+		public abstract ICancelDecider Decider { get; }
+		public abstract TResult ExecuteFinal();
+		public sealed override TResult Execute() {
+			if(IsInvalid) return Error();
+			if(!NoCancel && Decider?.Cancels(this) == true) return Cancel();
+			return ExecuteFinal();
+		}
+	}
+	public class WalkEvent2 : ConvenientTodoCancelableEvent<WalkResult> {
+		public Creature Creature;
+		public Point Destination;
+		public bool IgnoreRange = false;
+		public WalkEvent2(Creature creature, Point destination) : base(creature.GameUniverse) {
+			this.Creature = creature;
+			this.Destination = destination;
+		}
+		public bool OutOfRange => !IgnoreRange && Creature.Position.ChebyshevDistanceFrom(Destination) > 1;
+		public override bool IsInvalid => Creature == null; /* or destination not on map */ //todo
+		public override ICancelDecider Decider => Creature?.Decider;
+		public override WalkResult ExecuteFinal() {
+			if(OutOfRange || /*TerrainIsBlocking ||*/ CreatureAt(Destination) != null) {
+				// todo, there would be some kind of opportunity to print a message here.
+				return new WalkResult(); //return the failure
+			}
+			bool moved = Creatures.Move(Creature, Destination);
+			if(moved) return new WalkResult { Succeeded = true };
+			else return new WalkResult();
+		}
+	}
+	public abstract class CreatureEvent<TResult> : ConvenientTodoCancelableEvent<TResult> where TResult : CancelableResult, new() {
+		public virtual Creature Creature { get; set; }
+		public CreatureEvent(Creature creature) : base(creature.GameUniverse) { this.Creature = creature; }
+		public override ICancelDecider Decider => Creature?.Decider;
+		public override bool IsInvalid => Creature == null;
+	}
+	public class WalkEvent3 : CreatureEvent<WalkResult> {
+		public Point Destination;
+		public bool IgnoreRange = false;
+		public WalkEvent3(Creature creature, Point destination) : base(creature) {
+			this.Destination = destination;
+		}
+		public bool OutOfRange => !IgnoreRange && Creature.Position.ChebyshevDistanceFrom(Destination) > 1;
+		//todo: IsInvalid shows the call to base.IsValid which actually checks the same thing right now:
+		public override bool IsInvalid => Creature == null || base.IsInvalid; /* or destination not on map */
+		public override WalkResult ExecuteFinal() {
+			if(OutOfRange || /*TerrainIsBlocking ||*/ CreatureAt(Destination) != null) {
+				// todo, there would be some kind of opportunity to print a message here.
+				return new WalkResult(); //return the failure
+			}
+			bool moved = Creatures.Move(Creature, Destination);
+			if(moved) return new WalkResult { Succeeded = true };
+			else return new WalkResult();
+		}
 	}
 
 
@@ -65,7 +153,7 @@ namespace RoguelikeRewrite {
 		public Point Destination;
 		public bool IgnoreRange = false;
 		public bool IgnoreBlockingTerrain = false;
-		public ICancelDecider<WalkEvent> Decider = null;
+		public CancelDecider<WalkEvent> Decider = null;
 
 		public WalkEvent(Creature creature, Point destination) : base(creature.GameUniverse) {
 			//todo: the constructor will check the basic integrity of these args.
@@ -124,7 +212,7 @@ namespace RoguelikeRewrite {
 
 		public Creature Caster;
 		public Point Target;
-		public ICancelDecider<FireballEvent> Decider = null;
+		public CancelDecider<FireballEvent> Decider = null;
 
 		public FireballEvent(Creature caster, Point target) : base(caster.GameUniverse) {
 			this.Caster = caster;
@@ -155,6 +243,8 @@ namespace RoguelikeRewrite {
 		}
 
 		public override void Execute() {
+
+			if(Creature.State == CreatureState.Dead) return;
 			// todo: All this actual AI code *probably* won't go directly in the event like this.
 			// It'll probably be a method on the Creature, and this event will just call it.
 			foreach(Creature c in Creatures[Creature.Position.EnumeratePointsAtChebyshevDistance(1, true, false)]) {
@@ -174,7 +264,7 @@ namespace RoguelikeRewrite {
 	}
 
 	public class PlayerActionChoice { //todo, needs a better name i think
-		public IEvent ChosenAction;
+		public ITimedEvent ChosenAction;
 	}
 
 	public class PlayerTurnEvent : Event {
@@ -194,6 +284,8 @@ namespace RoguelikeRewrite {
 			//next is the hook
 
 			TurnStarted?.Invoke();
+
+			if(Player.State == CreatureState.Dead) return;
 
 			PlayerActionChoice choice = new PlayerActionChoice();
 
@@ -217,7 +309,8 @@ namespace RoguelikeRewrite {
 					break;
 			}*/
 			if(choice.ChosenAction is WalkEvent || choice.ChosenAction is FireballEvent) {
-				choice.ChosenAction.ExecuteEvent();
+				var result = choice.ChosenAction.Execute();
+				var time = result.TotalTime; //todo, use for scheduling
 			}
 
 			Q.Schedule(new PlayerTurnEvent(GameUniverse), 120, null); //todo, player initiative

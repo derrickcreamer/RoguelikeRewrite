@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace RoguelikeRewrite {
+namespace RoguelikeRewrite3 {
 	interface IActionTarget {
 		GameAction GetDefaultBumpAction(); // or something!
 		// I think this'll be useful because an object can return any action it wants, not necessarily one that refers to itself.

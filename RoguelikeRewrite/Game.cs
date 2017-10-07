@@ -24,10 +24,18 @@ namespace RoguelikeRewrite {
 			Creatures = new Grid<Creature, Point>(p => p.X >= 0 && p.X < 30 && p.Y >= 0 && p.Y < 20);
 
 			// now some setup. It seems likely that a bunch of this will be handed off to things like the dungeon generator:
-			Creatures.Add(new Creature(this), new Point(15, 8));
-			Creatures.Add(new Creature(this){ State = CreatureState.Crazy }, new Point(8, 17));
-			Creatures.Add(new Creature(this) { State = CreatureState.Crazy }, new Point(27, 4));
-			Creatures.Add(new Creature(this) { State = CreatureState.Angry }, new Point(7, 15));
+			Player = new Creature(this);
+			Creatures.Add(Player, new Point(15, 8));
+			Q.Schedule(new PlayerTurnEvent(this), 120, null);
+			Creature c = new Creature(this) { State = CreatureState.Crazy };
+			Creatures.Add(c, new Point(8, 17));
+			Q.Schedule(new AiTurnEvent(c), 120, null);
+			c = new Creature(this) { State = CreatureState.Crazy };
+			Creatures.Add(c, new Point(27, 4));
+			Q.Schedule(new AiTurnEvent(c), 120, null);
+			c = new Creature(this) { State = CreatureState.Angry };
+			Creatures.Add(c, new Point(7, 15));
+			Q.Schedule(new AiTurnEvent(c), 120, null);
 		}
 	}
 	public class GameObject {

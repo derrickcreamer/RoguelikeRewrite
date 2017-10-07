@@ -4,10 +4,14 @@ using UtilityCollections;
 using SunshineConsole;
 using GameComponents;
 using GameComponents.DirectionUtility;
+using OpenTK.Graphics;
+using System.Threading;
+using OpenTK.Input;
 
 namespace RoguelikeRewrite {
 	class Program {
 		static void Main(string[] args) {
+			RunUI(); return;
 			int i = 0;
 			/*foreach(var x in EightDirections.Enumerate(false, true, true, Dir8.SW)) {
 				var y = x;
@@ -42,6 +46,88 @@ namespace RoguelikeRewrite {
 			//w.Write(0, 0, '!', OpenTK.Graphics.Color4.Azure);
 			//w.WindowUpdate();
 			w.Exit();
+		}
+		static void RunUI() {
+			var g = new GameUniverse();
+			ConsoleWindow w = new ConsoleWindow(20, 30, "Roguelike Rewrite Tech Demo");
+			FireballEvent.OnExplosion += (ev, radius) => {
+
+			};
+			int turnsDeadCounter = 10;
+			PlayerTurnEvent.OnTurnStarted += ev => {
+				w.HoldUpdates();
+				for(int i = 0; i < 20; i++) {
+					for(int j = 0; j < 30; j++) {
+						w.Write(i,j,' ', Color4.Black);
+					}
+				}
+				foreach(var c in g.Creatures) {
+					char ch = 'C';
+					if(c == g.Player) ch = '@';
+					Color4 color;
+					switch(c.State) {
+						case CreatureState.Angry:
+							color = Color4.Red;
+							break;
+						case CreatureState.Crazy:
+							color = Color4.Yellow;
+							break;
+						case CreatureState.Dead:
+							ch = '%';
+							color = Color4.Gray;
+							break;
+						case CreatureState.Normal:
+						default:
+							color = Color4.White;
+							break;
+					}
+					w.Write(20-c.Position.Y, c.Position.X, ch, color);
+				}
+				w.ResumeUpdates();
+				if(!w.WindowUpdate()) g.Suspend = true;
+				if(g.Player.State == CreatureState.Dead) {
+					if(turnsDeadCounter-- > 0) {
+						//schedule another turn for the player so we can keep updating for a little while:
+						g.Q.Schedule(new PlayerTurnEvent(g), 120, null);
+						Thread.Sleep(400);
+					}
+					else {
+						g.Suspend = true;
+					}
+				}
+			};
+			PlayerTurnEvent.ChoosePlayerAction += ev => {
+				while(true) {
+					if(w.KeyPressed) {
+						Dir4? dir = null;
+						switch(w.GetKey()) {
+							case Key.Up:
+							case Key.W:
+								dir = Dir4.N;
+								break;
+							case Key.Down:
+							case Key.S:
+								dir = Dir4.S;
+								break;
+							case Key.Left:
+							case Key.A:
+								dir = Dir4.W;
+								break;
+							case Key.Right:
+							case Key.D:
+								dir = Dir4.E;
+								break;
+						}
+						if(dir != null) {
+							ev.ChosenAction = new WalkEvent(g.Player, g.Player.Position.PointInDir(dir.Value));
+							return;
+						}
+					}
+					if(!w.WindowUpdate()) g.Suspend = true;
+					else Thread.Sleep(10);
+				}
+			};
+			g.Run();
 		}
 	}
 }

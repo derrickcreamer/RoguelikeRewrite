@@ -18,17 +18,18 @@ namespace RoguelikeRewrite {
 	public class EventResult {
 		public virtual bool InvalidEvent { get; set; }
 	}
-	public class ActionResult : EventResult, IActionResult {
-		public virtual bool Canceled { get; set; }
-		public virtual long TotalTime { get; set; } = 120; //todo, default? "1.Turn()" or anything?
-	}
 	public interface IActionResult {
 		bool InvalidEvent { get; }
 		bool Canceled { get; }
-		long TotalTime { get; }
+		long Cost { get; }
 	} // these 2 interfaces exist to be used by the 'player turn' action.
 	public interface IActionEvent {
 		IActionResult Execute();
+	}
+	public class ActionResult : EventResult, IActionResult {
+		public virtual bool Canceled { get; set; }
+		//todo, xml: this value should be ignored if InvalidEvent and/or Canceled
+		public virtual long Cost { get; set; } = 120; //todo, default? "1.Turn()" or anything?
 	}
 	public abstract class ActionEvent<TResult> : Event<TResult>, IActionEvent where TResult : ActionResult, new() {
 		//note that the NoCancel bool indicates that cancellations will be ignored and
@@ -36,10 +37,11 @@ namespace RoguelikeRewrite {
 		public virtual bool NoCancel { get; set; }
 		public ActionEvent(GameUniverse g) : base(g) { }
 		IActionResult IActionEvent.Execute() => Execute();
-		protected virtual TResult Error() => new TResult(){ InvalidEvent = true };
-		protected virtual TResult Cancel() => new TResult() { Canceled = true };
-		protected virtual TResult Done() => new TResult(); //todo! not sure about this. Does it imply any kind of success or failure?
+		protected virtual TResult Error() => new TResult(){ InvalidEvent = true, Cost = GetCost() };
+		protected virtual TResult Cancel() => new TResult() { Canceled = true, Cost = GetCost() };
+		protected virtual TResult Done() => new TResult(){ Cost = GetCost() }; //todo! not sure about this. Does it imply any kind of success or failure?
 		public virtual bool IsInvalid => false;
+		protected virtual long GetCost() => 120L; // actually 1.Turn() or Turns(1) or whatever
 	}
 	//todo, xml: this should return false for types it doesn't recognize
 	public interface ICancelDecider {
@@ -185,7 +187,8 @@ namespace RoguelikeRewrite {
 
 	public class FireballEvent : CreatureEvent<ActionResult> {
 
-		public static event Action<Point, int> OnExplosion;
+		//the int is the current radius. xml comment doesn't work here. how should i communicate this?
+		public static event Action<FireballEvent, int> OnExplosion;
 
 		public Point Target;
 
@@ -196,7 +199,7 @@ namespace RoguelikeRewrite {
 		protected override ActionResult ExecuteFinal() {
 			for(int i = 0; i<=2; ++i) {
 				//todo, animation? here's an attempt:
-				OnExplosion?.Invoke(Target, i);
+				OnExplosion?.Invoke(this, i);
 				foreach(Creature c in Creatures[Target.EnumeratePointsAtManhattanDistance(i, true)]) {
 					c.State = CreatureState.Dead;
 					//todo, does anything else need to be done here?
@@ -233,35 +236,19 @@ namespace RoguelikeRewrite {
 		}
 	}
 
-	public class PlayerActionChoice { //todo, needs a better name i think
-		public IActionEvent ChosenAction;
-	}
-
 	public class PlayerTurnEvent : SimpleEvent {
+		public IActionEvent ChosenAction = null;
 
-		public static event Action TurnStarted; //todo, 'OnTurnStarted'? what's the convention here?
-		public static event Action<PlayerActionChoice> ChoosePlayerAction;
-		//todo: hmm, this one doesn't really NEED to take a creature, if it only affects the player.
+		public static event Action<PlayerTurnEvent> OnTurnStarted;
+		public static event Action<PlayerTurnEvent> ChoosePlayerAction;
+
 		public PlayerTurnEvent(GameUniverse g) : base(g) { }
 
 		public override void ExecuteEvent() {
-			//now what does this one actually do?
-			// IIRC, it needs to call a hook that'll determine what action to take?
-			// and then either take that action or just do nothing.
-
-			// so first it'll check anything that needs checking...if there is anything. not sure.
-
-			//next is the hook
-
-			TurnStarted?.Invoke(); //todo, maybe including 'this' when the TurnStarted event is fired
-
+			OnTurnStarted?.Invoke(this);
 			if(Player.State == CreatureState.Dead) return;
-
-			PlayerActionChoice choice = new PlayerActionChoice();
-
-			ChoosePlayerAction?.Invoke(choice);
-
-			if(choice.ChosenAction == null) {
+			ChoosePlayerAction?.Invoke(this);
+			if(ChosenAction == null) {
 				//todo: it *might* be necessary to create & use a DoNothing action here, if important things happen during that action.
 				//todo: schedule turn for 1 turn in the future
 				return;
@@ -278,16 +265,19 @@ namespace RoguelikeRewrite {
 				case FireballEvent e:
 					break;
 			}*/
-			if(choice.ChosenAction is WalkEventOld || choice.ChosenAction is FireballEvent) {
-				var result = choice.ChosenAction.Execute(); //todo, wait, don't i need to check for cancellation here?
+			if(ChosenAction is WalkEvent || ChosenAction is FireballEvent) {
+				var result = ChosenAction.Execute(); //todo, wait, don't i need to check for cancellation here?
 				if(result.InvalidEvent) {
-					//todo - exception or what?
+					throw new InvalidOperationException($"Invalid event passed to player turn action [{ChosenAction.GetType().ToString()}]");
 				}
 				if(result.Canceled) {
+					Q.ScheduleImmediately(new PlayerTurnEvent(GameUniverse));
 					//todo, does this reschedule at 0, or just loop and ask again?
 				}
-				var time = result.TotalTime; //todo, use for scheduling
-				Q.Schedule(new PlayerTurnEvent(GameUniverse), time, null); //todo, player initiative
+				else {
+					var time = result.Cost;
+					Q.Schedule(new PlayerTurnEvent(GameUniverse), time, null); //todo, player initiative
+				}
 			}
 			else {
 				Q.Schedule(new PlayerTurnEvent(GameUniverse), 120, null); //todo, player initiative

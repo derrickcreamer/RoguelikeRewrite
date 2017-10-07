@@ -23,7 +23,7 @@ namespace RoguelikeRewrite {
 	public enum CreatureState { Normal, Angry, Crazy, Dead };
 	public class Creature : GameObject {
 		public CreatureState State;
-		public Point Position;
+		public Point Position => Creatures.GetPositionOf(this);
 		public CancelDecider Decider => null; //todo
 		public Creature(GameUniverse g) : base(g) {
 			//

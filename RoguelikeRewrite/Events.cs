@@ -45,23 +45,28 @@ namespace RoguelikeRewrite {
 	}
 	//todo, xml: this should return false for types it doesn't recognize
 	public interface ICancelDecider {
-		bool Cancels(object e);
+		bool Cancels(object ev);
 	}
-	public abstract class CancelDecider : ICancelDecider {
-		public virtual bool? WillCancel(object e) => null;
-		public abstract bool Cancels(object e);
+	public abstract class CancelDecider : GameObject, ICancelDecider {
+		public CancelDecider(GameUniverse g) : base(g) { }
+
+		public virtual bool? WillCancel(object ev) => null;
+		public abstract bool Cancels(object ev);
 	}
+	//I'm feeling like this class generally isn't the best idea. Not sure if it'll remain in the final version:
 	public abstract class CancelDecider<T> : CancelDecider {
-		public override bool? WillCancel(object e) {
-			if(e is T t) return WillCancel(t);
+		public CancelDecider(GameUniverse g) : base(g) { }
+
+		public override bool? WillCancel(object ev) {
+			if(ev is T t) return WillCancel(t);
 			else return false;
 		}
-		public override bool Cancels(object e) {
-			if(e is T t) return Cancels(t);
+		public override bool Cancels(object ev) {
+			if(ev is T t) return Cancels(t);
 			else return false;
 		}
-		public virtual bool? WillCancel(T e) => null;
-		public abstract bool Cancels(T e);
+		public virtual bool? WillCancel(T ev) => null;
+		public abstract bool Cancels(T ev);
 	}
 	public abstract class EasyEvent<TResult> : ActionEvent<TResult> where TResult : ActionResult, new() {
 		public EasyEvent(GameUniverse g) : base(g) { }
@@ -80,6 +85,9 @@ namespace RoguelikeRewrite {
 		public CreatureEvent(Creature creature) : base(creature.GameUniverse) { this.Creature = creature; }
 		public override ICancelDecider Decider => Creature?.Decider;
 		public override bool IsInvalid => Creature == null || Creature.State == CreatureState.Dead;
+		public class NoEffectNotification { } //todo, note that this has the same problem as described below. This might need to be a separate non-nested class.
+		//public static event Action<CreatureEvent<TResult>> NothingHappened; //todo: this was added to demonstrate how the 'nothing happens' message might work for *items*...
+		//protected virtual void InvokeNothingHappened() => NothingHappened?.Invoke(this); //todo: but also note that it won't work as-is, because of the type param.
 	}
 	//todo, is it worth it to have some kind of boolean pass/fail actionresult built-in for cases like this? :
 	public class WalkResult : ActionResult {
@@ -111,6 +119,8 @@ namespace RoguelikeRewrite {
 	//each event would probably get its own file, in another folder, eventually:
 
 	public class WalkCancelDecider : CancelDecider<WalkEventOld> {
+		public WalkCancelDecider(GameUniverse g) : base(g) { }
+
 		public override bool? WillCancel(WalkEventOld e) => e.OutOfRange || e.TerrainIsBlocking;
 		public override bool Cancels(WalkEventOld e) {
 			//todo, does THIS need to check the event's args for validity?
@@ -187,20 +197,29 @@ namespace RoguelikeRewrite {
 
 	public class FireballEvent : CreatureEvent<ActionResult> {
 
+		public class ExplosionNotification {
+			public FireballEvent Event;
+			public int Radius;
+		}
 		//the int is the current radius. xml comment doesn't work here. how should i communicate this?
-		public static event Action<FireballEvent, int> OnExplosion;
+		//public static event Action<(FireballEvent ev, int radius)> OnExplosion;
 
-		public Point Target;
+		public Point? Target;
 
-		public FireballEvent(Creature caster, Point target) : base(caster) {
+		public FireballEvent(Creature caster, Point? target) : base(caster) {
 			this.Target = target;
 		}
 
 		protected override ActionResult ExecuteFinal() {
+			if(Target == null) {
+				//todo "you waste the spell"
+				return Done();
+			}
 			for(int i = 0; i<=2; ++i) {
 				//todo, animation? here's an attempt:
-				OnExplosion?.Invoke(this, i);
-				foreach(Creature c in Creatures[Target.EnumeratePointsAtManhattanDistance(i, true)]) {
+				Notify(new ExplosionNotification{ Event = this, Radius = i });
+				//OnExplosion?.Invoke((this, i));
+				foreach(Creature c in Creatures[Target.Value.EnumeratePointsAtManhattanDistance(i, true)]) {
 					c.State = CreatureState.Dead;
 					//todo, does anything else need to be done here?
 				}
@@ -239,15 +258,26 @@ namespace RoguelikeRewrite {
 	public class PlayerTurnEvent : SimpleEvent {
 		public IActionEvent ChosenAction = null;
 
-		public static event Action<PlayerTurnEvent> OnTurnStarted;
-		public static event Action<PlayerTurnEvent> ChoosePlayerAction;
+		public class TurnStartNotification {
+			public PlayerTurnEvent Event;
+		}
+		public class ChoosePlayerActionNotification {
+			public PlayerTurnEvent Event;
+		}
+		//public static event Action<PlayerTurnEvent> OnTurnStarted;
+		//public static event Action<PlayerTurnEvent> ChoosePlayerAction;
 
 		public PlayerTurnEvent(GameUniverse g) : base(g) { }
 
 		public override void ExecuteEvent() {
-			OnTurnStarted?.Invoke(this);
+			Notify(new TurnStartNotification{ Event = this });
+			//OnTurnStarted?.Invoke(this);
 			if(Player.State == CreatureState.Dead) return;
-			ChoosePlayerAction?.Invoke(this);
+			Notify(new ChoosePlayerActionNotification{ Event = this });
+			//todo, i wonder if it would save time, or be confusing, if I had THIS form and also another form for convenience...
+			//  ...maybe there's still only one going out, but from in here we can Notify(this, SimpleNotification.PlayerTurnStarted); ?
+			//  seems like it would run into the naming problems like before, but it would be a bit easier otherwise.
+			//ChoosePlayerAction?.Invoke(this);
 			if(ChosenAction == null) {
 				//todo: it *might* be necessary to create & use a DoNothing action here, if important things happen during that action.
 				//todo: schedule turn for 1 turn in the future

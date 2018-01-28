@@ -24,9 +24,25 @@ namespace RoguelikeRewrite {
 	public class Creature : GameObject {
 		public CreatureState State;
 		public Point Position => Creatures.GetPositionOf(this);
-		public CancelDecider Decider => null; //todo
+		//todo, this will probably be just a getter, switching on species:
+		// (but for now i need to set the player's Decider directly)
+		public CancelDecider Decider { get; set; }
 		public Creature(GameUniverse g) : base(g) {
 			//
+		}
+	}
+
+	public class PlayerCancelDecider : CancelDecider {
+		public PlayerCancelDecider(GameUniverse g) : base(g) { }
+
+		//public static event Func<object, bool> DecideCancel;
+		public class DecideNotification {
+			public object Action;
+			public bool CancelAction;
+		}
+		public override bool Cancels(object ev) {
+			var result = Notify(new DecideNotification{ Action = ev });
+			return result.CancelAction;
 		}
 	}
 }

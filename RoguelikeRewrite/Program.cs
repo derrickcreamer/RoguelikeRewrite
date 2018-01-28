@@ -49,9 +49,18 @@ namespace RoguelikeRewrite {
 		}
 		static void RunUI() {
 			var g = new GameUniverse();
-			ConsoleWindow w = new ConsoleWindow(20, 30, "Roguelike Rewrite Tech Demo");
+			Dir4? walkDir = null;
+			ConsoleWindow w = new ConsoleWindow(21, 30, "Roguelike Rewrite Tech Demo");
 			FireballEvent.OnExplosion += (ev, radius) => {
-
+				Dictionary<Point, char> chs = new Dictionary<Point, char>();
+				Dictionary<Point, Color4> colors = new Dictionary<Point, Color4>();
+				w.HoldUpdates();
+				foreach(Point p in ev.Target.Value.EnumeratePointsAtManhattanDistance(radius, true)) {
+					w.Write(19-p.Y, p.X, '&', Color4.OrangeRed);
+				}
+				w.ResumeUpdates();
+				w.WindowUpdate();
+				Thread.Sleep(100);
 			};
 			int turnsDeadCounter = 10;
 			PlayerTurnEvent.OnTurnStarted += ev => {
@@ -81,7 +90,7 @@ namespace RoguelikeRewrite {
 							color = Color4.White;
 							break;
 					}
-					w.Write(20-c.Position.Y, c.Position.X, ch, color);
+					w.Write(19-c.Position.Y, c.Position.X, ch, color);
 				}
 				w.ResumeUpdates();
 				if(!w.WindowUpdate()) g.Suspend = true;
@@ -98,6 +107,17 @@ namespace RoguelikeRewrite {
 			};
 			PlayerTurnEvent.ChoosePlayerAction += ev => {
 				while(true) {
+					if(walkDir != null) {
+						if(w.KeyPressed) {
+							w.GetKey();
+							walkDir = null;
+						}
+						else {
+							ev.ChosenAction = new WalkEvent(g.Player, g.Player.Position.PointInDir(walkDir.Value));
+							Thread.Sleep(30);
+							return;
+						}
+					}
 					if(w.KeyPressed) {
 						Dir4? dir = null;
 						switch(w.GetKey()) {
@@ -117,17 +137,91 @@ namespace RoguelikeRewrite {
 							case Key.D:
 								dir = Dir4.E;
 								break;
+							case Key.M:
+								ev.ChosenAction = new FireballEvent(g.Player, null);
+								return;
 						}
 						if(dir != null) {
 							ev.ChosenAction = new WalkEvent(g.Player, g.Player.Position.PointInDir(dir.Value));
+							if(w.KeyIsDown(Key.ShiftLeft) || w.KeyIsDown(Key.ShiftRight)) walkDir = dir;
 							return;
 						}
 					}
-					if(!w.WindowUpdate()) g.Suspend = true;
+					if(!w.WindowUpdate()) {
+						g.Suspend = true;
+						return;
+					}
 					else Thread.Sleep(10);
 				}
 			};
+			PlayerCancelDecider.DecideCancel += ev => {
+				// More events would go here eventually, but right now it's just for targeting:
+				switch(ev) {
+					case FireballEvent e:
+						{
+							if(e.Target != null) return false;
+							WriteStatusString(w, "Fireball - choose a direction ");
+							{
+								bool done = false;
+								while(!done) {
+									if(w.KeyPressed) {
+										Dir4? dir = null;
+										switch(w.GetKey()) {
+											case Key.Up:
+											case Key.W:
+												dir = Dir4.N;
+												break;
+											case Key.Down:
+											case Key.S:
+												dir = Dir4.S;
+												break;
+											case Key.Left:
+											case Key.A:
+												dir = Dir4.W;
+												break;
+											case Key.Right:
+											case Key.D:
+												dir = Dir4.E;
+												break;
+											case Key.Escape:
+											case Key.Q:
+												done = true;
+												break;
+										}
+										if(dir != null) {
+											Point current = e.Creature.Position;
+											while(true) {
+												Point next = current.PointInDir(dir.Value);
+												if(g.Creatures[next] != null && g.Creatures[next] != e.Creature) {
+													current = next;
+													break;
+												}
+												if(g.Creatures.InBounds(next)) current = next;
+												else break;
+											}
+											e.Target = current;
+											done = true;
+										}
+									}
+									if(!w.WindowUpdate()) {
+										g.Suspend = true;
+										return true;
+									}
+									else Thread.Sleep(10);
+								}
+							}
+							WriteStatusString(w, "");
+							return e.Target == null;
+						}
+				}
+				return false;
+			};
 			g.Run();
+		}
+		static void WriteStatusString(ConsoleWindow w, string s) {
+			s = s.PadRight(30);
+			w.Write(20, 0, s, Color4.Lime);
+			w.WindowUpdate();
 		}
 	}
 }

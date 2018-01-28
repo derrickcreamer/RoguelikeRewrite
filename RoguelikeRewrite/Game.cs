@@ -11,6 +11,11 @@ namespace RoguelikeRewrite {
 		public Grid<Creature, Point> Creatures;
 		//RNG eventually
 
+		public event Action<object> OnNotify; // name?
+		public T Notify<T>(T notification) {
+			OnNotify?.Invoke(notification);
+			return notification;
+		}
 		public void Run() {
 			Suspend = false;
 			while(!Suspend) {
@@ -24,7 +29,7 @@ namespace RoguelikeRewrite {
 			Creatures = new Grid<Creature, Point>(p => p.X >= 0 && p.X < 30 && p.Y >= 0 && p.Y < 20);
 
 			// now some setup. It seems likely that a bunch of this will be handed off to things like the dungeon generator:
-			Player = new Creature(this);
+			Player = new Creature(this){ Decider = new PlayerCancelDecider() };
 			Creatures.Add(Player, new Point(15, 8));
 			Q.Schedule(new PlayerTurnEvent(this), 120, null);
 			Creature c = new Creature(this) { State = CreatureState.Crazy };
@@ -42,6 +47,7 @@ namespace RoguelikeRewrite {
 		public GameUniverse GameUniverse;
 		public GameObject(GameUniverse g) { GameUniverse = g; }
 
+		public T Notify<T>(T notification) => GameUniverse.Notify(notification);
 		public Creature Player => GameUniverse.Player;
 		public EventScheduler Q => GameUniverse.Q;
 		public Grid<Creature, Point> Creatures => GameUniverse.Creatures;

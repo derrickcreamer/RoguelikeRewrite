@@ -77,7 +77,7 @@ namespace RoguelikeRewrite {
 					w.WindowUpdate();
 					Thread.Sleep(100);
 					break;
-				case PlayerTurnEvent.TurnStartNotification n:
+				case PlayerTurnEvent.NotifyTurnStart n:
 					w.HoldUpdates();
 					for(int i = 0; i < 20; i++) {
 						for(int j = 0; j < 30; j++) {
@@ -119,7 +119,7 @@ namespace RoguelikeRewrite {
 						}
 					}
 					break;
-				case PlayerTurnEvent.ChoosePlayerActionNotification n:
+				case PlayerTurnEvent.NotifyChooseAction n:
 					while(true) {
 						if(walkDir != null) {
 							if(w.KeyPressed) {

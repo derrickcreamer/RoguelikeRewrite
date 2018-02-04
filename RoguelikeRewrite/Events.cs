@@ -5,15 +5,30 @@ using GameComponents.DirectionUtility;
 namespace RoguelikeRewrite {
 	// SimpleEvent is a separate branch here, used only for a few event types (like player and AI turns).
 	// Most events will return Results objects and inherit from Event<TResult>.
+	// (SimpleEvent wouldn't need to exist if void could be used as a type param...)
 	//todo, xml: no return value
 	public abstract class SimpleEvent : GameObject, IEvent {
 		public SimpleEvent(GameUniverse g) : base(g) { }
 		public abstract void ExecuteEvent();
+		public override T Notify<T>(T notification) {
+			if(notification is IEventNotify eventNotify) {
+				eventNotify.SetEvent(this); // Automatically associate this event with the notification when possible
+			}
+			return base.Notify(notification);
+		}
+		public T Notify<T>() where T : new() => Notify(new T());
 	}
 	public abstract class Event<TResult> : GameObject, IEvent {
 		public Event(GameUniverse g) : base(g) { }
 		void IEvent.ExecuteEvent() { Execute(); }
 		public abstract TResult Execute();
+		public override T Notify<T>(T notification) {
+			if(notification is IEventNotify eventNotify) {
+				eventNotify.SetEvent(this); // Automatically associate this event with the notification when possible
+			}
+			return base.Notify(notification);
+		}
+		public T Notify<T>() where T : new() => Notify(new T());
 	}
 	public class EventResult {
 		public virtual bool InvalidEvent { get; set; }
@@ -71,7 +86,8 @@ namespace RoguelikeRewrite {
 		public override ICancelDecider Decider => Creature?.Decider;
 		public override bool IsInvalid => Creature == null || Creature.State == CreatureState.Dead;
 	}
-	public class NotifyItemHadNoEffect{ } //todo: this isn't used yet, nor is it final
+	public interface IItemUseEvent { } //todo, not final
+	public class NotifyItemHadNoEffect : EventNotify<IItemUseEvent>{ } //todo: this isn't used yet, nor is it final
 	//todo, is it worth it to have some kind of boolean pass/fail actionresult built-in for cases like this? :
 	public class WalkResult : ActionResult {
 		public bool Succeeded { get; set; }
@@ -117,7 +133,7 @@ namespace RoguelikeRewrite {
 			}
 			for(int i = 0; i<=2; ++i) {
 				//todo, animation? here's an attempt:
-				Notify(new NotifyExplosion{ Event = this, Radius = i });
+				Notify(new NotifyExplosion{ Radius = i });
 				foreach(Creature c in Creatures[Target.Value.EnumeratePointsAtManhattanDistance(i, true)]) {
 					c.State = CreatureState.Dead;
 					//todo, does anything else need to be done here?
@@ -154,31 +170,28 @@ namespace RoguelikeRewrite {
 		}
 	}
 
-	//todo: how about a base class for event notifications? BaseEventNotification<T>?
-	// It wouldn't do anything on the UI side. It would just make defining them a bit easier.
-
-	public class BaseEventNotification<T> {
-		public T Event { get; set; } //Yeah, try using this. Turns the simplest ones into one-liners.
+	// This interface just makes EventNotify<T> easier to work with internally.
+	public interface IEventNotify {
+		void SetEvent(object o);
+	}
+	// This base class doesn't do anything on the UI side - it just makes defining these a bit easier.
+	public class EventNotify<T> : IEventNotify {
+		public T Event { get; set; }
+		void IEventNotify.SetEvent(object o){ Event = (T)o; }
 	}
 
 	public class PlayerTurnEvent : SimpleEvent {
 		public IActionEvent ChosenAction { get; set; } = null;
 
-		public class TurnStartNotification {
-			public PlayerTurnEvent Event { get; set; }
-		}
-		public class ChoosePlayerActionNotification {
-			public PlayerTurnEvent Event { get; set; }
-		}
-		public class NotifyChooseAction : BaseEventNotification<PlayerTurnEvent> { }
+		public class NotifyTurnStart : EventNotify<PlayerTurnEvent> { }
+		public class NotifyChooseAction : EventNotify<PlayerTurnEvent> { }
 
 		public PlayerTurnEvent(GameUniverse g) : base(g) { }
 
 		public override void ExecuteEvent() {
-			Notify(new TurnStartNotification{ Event = this });
+			Notify<NotifyTurnStart>();
 			if(Player.State == CreatureState.Dead) return;
-			Notify(new ChoosePlayerActionNotification{ Event = this });
-			Notify(new NotifyChooseAction{ Event = this });
+			Notify<NotifyChooseAction>();
 			//todo, i wonder if it would save time, or be confusing, if I had THIS form and also another form for convenience...
 			//  ...maybe there's still only one going out, but from in here we can Notify(this, SimpleNotification.PlayerTurnStarted); ?
 			//  seems like it would run into the naming problems like before, but it would be a bit easier otherwise.

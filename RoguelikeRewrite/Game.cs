@@ -47,7 +47,7 @@ namespace RoguelikeRewrite {
 		public GameUniverse GameUniverse;
 		public GameObject(GameUniverse g) { GameUniverse = g; }
 
-		public T Notify<T>(T notification) => GameUniverse.Notify(notification);
+		public virtual T Notify<T>(T notification) => GameUniverse.Notify(notification);
 		public Creature Player => GameUniverse.Player;
 		public EventScheduler Q => GameUniverse.Q;
 		public Grid<Creature, Point> Creatures => GameUniverse.Creatures;

@@ -167,7 +167,8 @@ namespace GameComponents {
 			BinaryWriter writer,
 			Action<EventScheduling, BinaryWriter> onSaveEventScheduling,
 			Action<Initiative, BinaryWriter> onSaveInitiative,
-			Action<IEvent, BinaryWriter> saveIEvent) {
+			Action<IEvent, BinaryWriter> saveIEvent)
+		{
 			//todo test this
 			if(saveIEvent == null) throw new ArgumentNullException(nameof(saveIEvent));
 			if(scheduler == null) throw new ArgumentNullException(nameof(scheduler));
@@ -231,7 +232,8 @@ namespace GameComponents {
 		public static EventScheduler Deserialize(BinaryReader reader,
 			Action<EventScheduling, BinaryReader> onLoadEventScheduling,
 			Action<Initiative, BinaryReader> onLoadInitiative,
-			Func<BinaryReader, IEvent> loadIEvent) {
+			Func<BinaryReader, IEvent> loadIEvent)
+		{
 			if(loadIEvent == null) throw new ArgumentNullException(nameof(loadIEvent));
 			if(reader == null) throw new ArgumentNullException(nameof(reader));
 			//dict of id -> obj this time...

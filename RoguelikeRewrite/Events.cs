@@ -3,7 +3,7 @@ using GameComponents;
 using GameComponents.DirectionUtility;
 
 namespace RoguelikeRewrite {
-	// Event is a separate branch here, used only for a few event types (like player and AI turns).
+	// SimpleEvent is a separate branch here, used only for a few event types (like player and AI turns).
 	// Most events will return Results objects and inherit from Event<TResult>.
 	//todo, xml: no return value
 	public abstract class SimpleEvent : GameObject, IEvent {
@@ -53,21 +53,6 @@ namespace RoguelikeRewrite {
 		public virtual bool? WillCancel(object ev) => null;
 		public abstract bool Cancels(object ev);
 	}
-	//I'm feeling like this class generally isn't the best idea. Not sure if it'll remain in the final version:
-	public abstract class CancelDecider<T> : CancelDecider {
-		public CancelDecider(GameUniverse g) : base(g) { }
-
-		public override bool? WillCancel(object ev) {
-			if(ev is T t) return WillCancel(t);
-			else return false;
-		}
-		public override bool Cancels(object ev) {
-			if(ev is T t) return Cancels(t);
-			else return false;
-		}
-		public virtual bool? WillCancel(T ev) => null;
-		public abstract bool Cancels(T ev);
-	}
 	public abstract class EasyEvent<TResult> : ActionEvent<TResult> where TResult : ActionResult, new() {
 		public EasyEvent(GameUniverse g) : base(g) { }
 		//todo, xml: null is fine
@@ -86,8 +71,6 @@ namespace RoguelikeRewrite {
 		public override ICancelDecider Decider => Creature?.Decider;
 		public override bool IsInvalid => Creature == null || Creature.State == CreatureState.Dead;
 		public class NoEffectNotification { } //todo, note that this has the same problem as described below. This might need to be a separate non-nested class.
-		//public static event Action<CreatureEvent<TResult>> NothingHappened; //todo: this was added to demonstrate how the 'nothing happens' message might work for *items*...
-		//protected virtual void InvokeNothingHappened() => NothingHappened?.Invoke(this); //todo: but also note that it won't work as-is, because of the type param.
 	}
 	//todo, is it worth it to have some kind of boolean pass/fail actionresult built-in for cases like this? :
 	public class WalkResult : ActionResult {
@@ -113,96 +96,12 @@ namespace RoguelikeRewrite {
 		}
 	}
 
-
-
-
-	//each event would probably get its own file, in another folder, eventually:
-
-	public class WalkCancelDecider : CancelDecider<WalkEventOld> {
-		public WalkCancelDecider(GameUniverse g) : base(g) { }
-
-		public override bool? WillCancel(WalkEventOld e) => e.OutOfRange || e.TerrainIsBlocking;
-		public override bool Cancels(WalkEventOld e) {
-			//todo, does THIS need to check the event's args for validity?
-			// what guarantees am I giving & given during this method call?
-			//if(e.OutOfRange || e.TerrainIsBlocking) return true;
-			if(WillCancel(e) == true) return true;
-
-			//if any nondetermistic stuff happens, it happens here
-			// - prompting player "really do that?"  (i think this would be handled with a subscription-event here somewhere?)
-			// - RNG stuff
-
-			return false;
-		}
-	}
-
-	public class WalkEventOld : ActionEvent<WalkResult> {
-		// (to make events easy to read, I'd probably include default values on all optional stuff, like this:)
-		public Creature Creature;
-		// (should some of these be readonly or properties? hmm)
-		//todo, i know SOME of these need to be properties, so, it's annoying, but i guess they should all be.
-		// (some'll need to be properties for interfaces like ITargetedEvent)
-		public Point Destination;
-		public bool IgnoreRange = false;
-		public bool IgnoreBlockingTerrain = false;
-		public CancelDecider<WalkEventOld> Decider = null;
-
-		public WalkEventOld(Creature creature, Point destination) : base(creature.GameUniverse) {
-			//todo: the constructor will check the basic integrity of these args.
-			//For example, a Creature that isn't on the map might throw an exception here, while
-			// a Creature trying to move into another creature's cell is still valid despite
-			// the inevitable result of Canceled or Failed.
-			// -- actually I think the ctor won't check anything. Execution might return Invalid, instead?
-			// -- maybe a property or method to check basic validity?
-			// -- (dead creatures can't walk, can't walk to a location outside the map, etc.)
-			this.Creature = creature;
-			this.Destination = destination;
-		}
-
-		// This next part seems like a good idea: properties for everything that doesn't change
-		//  the game state, and methods (called CalculateFoo by convention?) for things that do.
-		
-		public bool TerrainIsBlocking => !IgnoreBlockingTerrain && false;// todo, actually like: Creature.CanEnter(TerrainAt(Destination));
-		//todo, should eventually add a set of game-specific extensions, so this would just be DistanceFrom:
-		public bool OutOfRange => !IgnoreRange && Creature.Position.ChebyshevDistanceFrom(Destination) > 1;
-
-		public bool CalculateSlipped() {
-			return false;
-			// todo: actually use the RNG and return true 20% of the time unless Creature is flying or otherwise stable
-		}
-
-		public override WalkResult Execute() {
-			//integrity was checked at construction - could the values or integrity have changed since then?
-			//is another check needed here? (certain args are required and can't be null, Creatures must be on the map, etc.)
-			//how should the overall flow of these checks happen? perhaps it's fine to create a WalkEvent with
-			// totally invalid data (like missing a Creature) and it doesn't throw at that time, but has an IsValid/IsLegal bool?
-			// and, i suppose, it would only throw if you actually tried to execute an invalid event?
-			// -- see above: no check on construction. Probably checks here and might return 'Invalid'.
-			if(!NoCancel && Decider?.Cancels(this) == true) return Cancel();
-
-			if(OutOfRange || TerrainIsBlocking || CreatureAt(Destination) != null) {
-				// todo, there would be some kind of opportunity to print a message here.
-				return new WalkResult(); //return the failure
-			}
-			bool moved = Creatures.Move(Creature, Destination);
-			if(moved) return new WalkResult{ Succeeded = true };
-			else return new WalkResult();
-
-		}
-		//todo: and then they need to be serializable in here too...
-	}
-
-
-
-
 	public class FireballEvent : CreatureEvent<ActionResult> {
 
 		public class ExplosionNotification {
 			public FireballEvent Event;
 			public int Radius;
 		}
-		//the int is the current radius. xml comment doesn't work here. how should i communicate this?
-		//public static event Action<(FireballEvent ev, int radius)> OnExplosion;
 
 		public Point? Target;
 
@@ -218,7 +117,6 @@ namespace RoguelikeRewrite {
 			for(int i = 0; i<=2; ++i) {
 				//todo, animation? here's an attempt:
 				Notify(new ExplosionNotification{ Event = this, Radius = i });
-				//OnExplosion?.Invoke((this, i));
 				foreach(Creature c in Creatures[Target.Value.EnumeratePointsAtManhattanDistance(i, true)]) {
 					c.State = CreatureState.Dead;
 					//todo, does anything else need to be done here?
@@ -264,20 +162,16 @@ namespace RoguelikeRewrite {
 		public class ChoosePlayerActionNotification {
 			public PlayerTurnEvent Event;
 		}
-		//public static event Action<PlayerTurnEvent> OnTurnStarted;
-		//public static event Action<PlayerTurnEvent> ChoosePlayerAction;
 
 		public PlayerTurnEvent(GameUniverse g) : base(g) { }
 
 		public override void ExecuteEvent() {
 			Notify(new TurnStartNotification{ Event = this });
-			//OnTurnStarted?.Invoke(this);
 			if(Player.State == CreatureState.Dead) return;
 			Notify(new ChoosePlayerActionNotification{ Event = this });
 			//todo, i wonder if it would save time, or be confusing, if I had THIS form and also another form for convenience...
 			//  ...maybe there's still only one going out, but from in here we can Notify(this, SimpleNotification.PlayerTurnStarted); ?
 			//  seems like it would run into the naming problems like before, but it would be a bit easier otherwise.
-			//ChoosePlayerAction?.Invoke(this);
 			if(ChosenAction == null) {
 				//todo: it *might* be necessary to create & use a DoNothing action here, if important things happen during that action.
 				//todo: schedule turn for 1 turn in the future

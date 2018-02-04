@@ -65,7 +65,7 @@ namespace RoguelikeRewrite {
 		}
 		static void HandleNotifications(object o) {
 			switch(o) {
-				case FireballEvent.ExplosionNotification n:
+				case FireballEvent.NotifyExplosion n:
 					Dictionary<Point, char> chs = new Dictionary<Point, char>();
 					Dictionary<Point, Color4> colors = new Dictionary<Point, Color4>();
 					w.HoldUpdates();
@@ -167,7 +167,7 @@ namespace RoguelikeRewrite {
 						}
 						else Thread.Sleep(10);
 					}
-				case PlayerCancelDecider.DecideNotification n:
+				case PlayerCancelDecider.NotifyDecide n:
 					n.CancelAction = DecideCancel(n.Action);
 					break;
 			}

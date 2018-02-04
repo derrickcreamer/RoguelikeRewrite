@@ -40,18 +40,18 @@ namespace RoguelikeRewrite {
 		protected virtual TResult Error() => new TResult(){ InvalidEvent = true, Cost = GetCost() };
 		protected virtual TResult Cancel() => new TResult() { Canceled = true, Cost = GetCost() };
 		protected virtual TResult Done() => new TResult(){ Cost = GetCost() }; //todo! not sure about this. Does it imply any kind of success or failure?
-		public virtual bool IsInvalid => false;
+		public virtual bool IsInvalid => false; //todo, why is IsInvalid a property and GetCost a method? can GetCost change state?
 		protected virtual long GetCost() => 120L; // actually 1.Turn() or Turns(1) or whatever
 	}
 	//todo, xml: this should return false for types it doesn't recognize
 	public interface ICancelDecider {
-		bool Cancels(object ev);
+		bool Cancels(object action);
 	}
 	public abstract class CancelDecider : GameObject, ICancelDecider {
 		public CancelDecider(GameUniverse g) : base(g) { }
 
-		public virtual bool? WillCancel(object ev) => null;
-		public abstract bool Cancels(object ev);
+		public virtual bool? WillCancel(object action) => null;
+		public abstract bool Cancels(object action);
 	}
 	public abstract class EasyEvent<TResult> : ActionEvent<TResult> where TResult : ActionResult, new() {
 		public EasyEvent(GameUniverse g) : base(g) { }
@@ -70,15 +70,16 @@ namespace RoguelikeRewrite {
 		public CreatureEvent(Creature creature) : base(creature.GameUniverse) { this.Creature = creature; }
 		public override ICancelDecider Decider => Creature?.Decider;
 		public override bool IsInvalid => Creature == null || Creature.State == CreatureState.Dead;
-		public class NoEffectNotification { } //todo, note that this has the same problem as described below. This might need to be a separate non-nested class.
 	}
+	public class NotifyItemHadNoEffect{ } //todo: this isn't used yet, nor is it final
 	//todo, is it worth it to have some kind of boolean pass/fail actionresult built-in for cases like this? :
 	public class WalkResult : ActionResult {
-		public bool Succeeded;
+		public bool Succeeded { get; set; }
 	}
 	public class WalkEvent : CreatureEvent<WalkResult> {
-		public Point Destination;
-		public bool IgnoreRange = false;
+		public Point Destination { get; set; }
+		public bool IgnoreRange { get; set; } = false; //todo, should i have a naming convention for 'arg' properties vs. calculated properties?
+		// ...such as IgnoreRange vs. OutOfRange. if i had a convention it might suggest 'IgnoreRange' and 'IsOutOfRange' - would that work for most?
 		public WalkEvent(Creature creature, Point destination) : base(creature) {
 			this.Destination = destination;
 		}
@@ -98,12 +99,12 @@ namespace RoguelikeRewrite {
 
 	public class FireballEvent : CreatureEvent<ActionResult> {
 
-		public class ExplosionNotification {
-			public FireballEvent Event;
-			public int Radius;
+		public class NotifyExplosion {
+			public FireballEvent Event { get; set; }
+			public int Radius { get; set; }
 		}
 
-		public Point? Target;
+		public Point? Target { get; set; }
 
 		public FireballEvent(Creature caster, Point? target) : base(caster) {
 			this.Target = target;
@@ -116,7 +117,7 @@ namespace RoguelikeRewrite {
 			}
 			for(int i = 0; i<=2; ++i) {
 				//todo, animation? here's an attempt:
-				Notify(new ExplosionNotification{ Event = this, Radius = i });
+				Notify(new NotifyExplosion{ Event = this, Radius = i });
 				foreach(Creature c in Creatures[Target.Value.EnumeratePointsAtManhattanDistance(i, true)]) {
 					c.State = CreatureState.Dead;
 					//todo, does anything else need to be done here?
@@ -127,7 +128,7 @@ namespace RoguelikeRewrite {
 	}
 
 	public class AiTurnEvent : SimpleEvent {
-		public Creature Creature;
+		public Creature Creature { get; set; }
 		public AiTurnEvent(Creature creature) : base(creature.GameUniverse) {
 			this.Creature = creature;
 		}
@@ -153,15 +154,23 @@ namespace RoguelikeRewrite {
 		}
 	}
 
+	//todo: how about a base class for event notifications? BaseEventNotification<T>?
+	// It wouldn't do anything on the UI side. It would just make defining them a bit easier.
+
+	public class BaseEventNotification<T> {
+		public T Event { get; set; } //Yeah, try using this. Turns the simplest ones into one-liners.
+	}
+
 	public class PlayerTurnEvent : SimpleEvent {
-		public IActionEvent ChosenAction = null;
+		public IActionEvent ChosenAction { get; set; } = null;
 
 		public class TurnStartNotification {
-			public PlayerTurnEvent Event;
+			public PlayerTurnEvent Event { get; set; }
 		}
 		public class ChoosePlayerActionNotification {
-			public PlayerTurnEvent Event;
+			public PlayerTurnEvent Event { get; set; }
 		}
+		public class NotifyChooseAction : BaseEventNotification<PlayerTurnEvent> { }
 
 		public PlayerTurnEvent(GameUniverse g) : base(g) { }
 
@@ -169,6 +178,7 @@ namespace RoguelikeRewrite {
 			Notify(new TurnStartNotification{ Event = this });
 			if(Player.State == CreatureState.Dead) return;
 			Notify(new ChoosePlayerActionNotification{ Event = this });
+			Notify(new NotifyChooseAction{ Event = this });
 			//todo, i wonder if it would save time, or be confusing, if I had THIS form and also another form for convenience...
 			//  ...maybe there's still only one going out, but from in here we can Notify(this, SimpleNotification.PlayerTurnStarted); ?
 			//  seems like it would run into the naming problems like before, but it would be a bit easier otherwise.

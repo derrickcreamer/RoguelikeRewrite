@@ -17,12 +17,12 @@ namespace RoguelikeRewrite {
 	public class PlayerCancelDecider : CancelDecider {
 		public PlayerCancelDecider(GameUniverse g) : base(g) { }
 
-		public class DecideNotification {
+		public class NotifyDecide {
 			public object Action;
 			public bool CancelAction;
 		}
-		public override bool Cancels(object ev) {
-			var result = Notify(new DecideNotification{ Action = ev });
+		public override bool Cancels(object action) {
+			var result = Notify(new NotifyDecide{ Action = action });
 			return result.CancelAction;
 		}
 	}
